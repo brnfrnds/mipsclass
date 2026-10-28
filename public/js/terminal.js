@@ -54,6 +54,7 @@
       screen,
       texture,
       screenCanvas,
+      keyboard,
       gadget,
       gadgetTexture,
       gadgetCanvas,

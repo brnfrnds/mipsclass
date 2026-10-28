@@ -33,12 +33,21 @@
     seats.forEach((s) => updateGadget(s, summary));
   }
 
-  // App wiring (ES modules: net client, gadgets, MIPS editor).
+  // App wiring (ES modules: net client, gadgets, MIPS editor, remote players).
   Promise.all([
     import('./js/net.js'),
     import('./js/gadgets.js'),
     import('./js/editor.js'),
-  ]).then(([net, gadgets, { mountEditor }]) => {
+    import('./js/players.js'),
+  ]).then(([net, gadgets, { mountEditor }, players]) => {
+    players.initPlayers({ scene, seats });
+
+    // Remote player events (server is the source of truth).
+    net.on('playerJoined', (m) => players.add(m.player));
+    net.on('playerLeft', (m) => players.remove(m.seatIndex));
+    net.on('playerTyping', (m) => players.setTyping(m.seatIndex, m.typing));
+    net.on('playerBlownUp', (m) => players.explode(m.seatIndex));
+
     // Local gadget writes: instant 3D feedback (gadgets.js already reports to the server).
     gadgets.onWrite((key, model) => refreshGadgetVisuals(model));
 
@@ -47,9 +56,6 @@
       gadgets.applyState(m.gadgetState);
       refreshGadgetVisuals(gadgets.getModel());
     });
-
-    // Expose for classic-script consumers (remote players land in Task 9).
-    window.net = net;
 
     mountEditor({ container: document.body });
   }).catch((err) => console.error('app wiring failed:', err));

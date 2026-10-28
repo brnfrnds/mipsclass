@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 const { Room } = require('../../server/room');
-const { handleMessage } = require('../../server/ws');
+const { handleMessage, drop } = require('../../server/ws');
 
 function makeRooms() {
   const rooms = new Map();
@@ -26,6 +26,7 @@ test('typing from one client is broadcast to the other client in the same room',
   const b = fakeWs();
   join(a, rooms, 'r1', 0, 'Ada');
   join(b, rooms, 'r1', 1, 'Bob');
+  a.sent.length = 0; b.sent.length = 0; // clear join-phase playerJoined broadcasts
   handleMessage(a, rooms, { type: 'typing', typing: true });
   assert.equal(b.sent.length, 1);
   assert.equal(b.sent[0].type, 'playerTyping');
@@ -68,6 +69,7 @@ test('cableMessage from seat A reaches only cabled seat B', () => {
   join(a, rooms, 'r1', 0, 'Ada');
   join(b, rooms, 'r1', 1, 'Bob');
   join(c, rooms, 'r1', 2, 'Cal');
+  a.sent.length = 0; b.sent.length = 0; c.sent.length = 0; // clear join-phase broadcasts
   handleMessage(a, rooms, { type: 'cableMessage', payload: 'ping' });
   assert.equal(b.sent.length, 1);
   assert.equal(b.sent[0].type, 'cableMessage');
@@ -88,4 +90,30 @@ test('gadgetUpdate updates room gadgetState and broadcasts to all in room', () =
   assert.equal(b.sent.length, 1);
   assert.equal(b.sent[0].type, 'gadgetState');
   assert.equal(b.sent[0].gadgetState.printer.text, 'HELLO');
+});
+
+test('joinRoom broadcasts playerJoined to the other members of the room', () => {
+  const rooms = makeRooms();
+  const a = fakeWs();
+  const b = fakeWs();
+  join(a, rooms, 'r1', 0, 'Ada');
+  join(b, rooms, 'r1', 1, 'Bob');
+  const pj = a.sent.filter((m) => m.type === 'playerJoined');
+  assert.equal(pj.length, 1, 'seated member should hear about the new player');
+  assert.equal(pj[0].player.name, 'Bob');
+  assert.equal(pj[0].player.seatIndex, 1);
+});
+
+test('drop frees the seat and broadcasts playerLeft to the remaining members', () => {
+  const rooms = makeRooms();
+  const a = fakeWs();
+  const b = fakeWs();
+  join(a, rooms, 'r1', 0, 'Ada');
+  join(b, rooms, 'r1', 1, 'Bob');
+  a.sent.length = 0;
+  drop(a);
+  assert.equal(rooms.get('r1').getState().seats[0], null, 'seat should be free again');
+  const pl = b.sent.filter((m) => m.type === 'playerLeft');
+  assert.equal(pl.length, 1, 'remaining member should hear about the departure');
+  assert.equal(pl[0].seatIndex, 0);
 });

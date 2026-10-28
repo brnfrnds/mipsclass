@@ -38,6 +38,7 @@ function handleMessage(ws, rooms, parsed) {
     }
     wsRooms.set(ws, { room, seatIndex: res.player.seatIndex, playerId: res.player.id });
     send(ws, { type: 'joined', player: res.player, state: room.getState() });
+    broadcast(room, { type: 'playerJoined', player: res.player }, ws);
     return;
   }
 
@@ -96,7 +97,12 @@ function handleMessage(ws, rooms, parsed) {
 }
 
 function drop(ws) {
+  const info = wsRooms.get(ws);
   wsRooms.delete(ws);
+  if (!info) return;
+  const room = info.room;
+  room.leave(info.playerId);
+  broadcast(room, { type: 'playerLeft', seatIndex: info.seatIndex });
 }
 
 module.exports = { handleMessage, broadcast, send, drop };
