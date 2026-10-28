@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MIPS Office — 80s Terminal</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <!-- Join / lobby overlay (shown until the player sits at a seat) -->
+  <div id="join" class="overlay">
+    <div class="panel">
+      <h1>MIPS OFFICE</h1>
+      <div class="section">
+        <label>Room ID</label>
+        <input type="text" id="roomId" placeholder="join existing room">
+      </div>
+      <div class="section">
+        <label>Or create (admin, seat count)</label>
+        <input type="number" id="seatCount" placeholder="4" min="1" max="16">
+      </div>
+      <div class="section">
+        <label>Your name</label>
+        <input type="text" id="playerName" placeholder="Operator">
+      </div>
+      <div class="section">
+        <label>Profile picture URL</label>
+        <input type="text" id="profilePic" placeholder="https://example.com/avatar.png">
+      </div>
+      <div class="seats" id="seats"></div>
+      <div class="actions">
+        <button id="btnCreate">Create Room</button>
+        <button id="btnJoin">Join Room</button>
+        <button id="btnSit" disabled>Sit at Seat</button>
+      </div>
+      <div id="msg" class="msg"></div>
+    </div>
+  </div>
+
+  <!-- In-game HUD (hidden until seated) -->
+  <div id="hud" class="overlay hidden">
+    <div id="seatLabel" class="seat-label">Seat <span id="seatNum">-</span></div>
+    <div id="status" class="status">Active</div>
+  </div>
+
+  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+  <script src="/js/main.js"></script>
+  <script src="/js/net.js"></script>
+  <script src="/js/scene.js"></script>
+  <script src="/js/terminal.js"></script>
+  <script src="/js/editor.js"></script>
+  <script src="/js/players.js"></script>
+  <script src="/js/gadgets.js"></script>
+  <script src="/js/mips.js"></script>
+</body>
+</html>

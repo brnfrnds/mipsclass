@@ -1,0 +1,129 @@
+html, body {
+  margin: 0;
+  overflow: hidden;
+  height: 100%;
+  background: #0b0c10;
+  color: #c5c6c7;
+  font-family: 'Courier New', Courier, monospace;
+}
+#canvas {
+  width: 100vw;
+  height: 100vh;
+  display: block;
+}
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(11, 12, 16, 0.9);
+  z-index: 10;
+}
+.overlay.hidden {
+  display: none;
+}
+.panel {
+  width: 420px;
+  padding: 24px;
+  border: 2px solid #66fcf1;
+  box-shadow: 0 0 20px rgba(102, 252, 241, 0.25);
+}
+h1 {
+  margin: 0 0 20px 0;
+  font-size: 20px;
+  letter-spacing: 4px;
+  color: #66fcf1;
+  text-transform: uppercase;
+}
+.section {
+  margin: 0 0 14px 0;
+}
+.section label {
+  display: block;
+  font-size: 12px;
+  color: #45a29e;
+  margin-bottom: 6px;
+}
+.section input {
+  width: 100%;
+  padding: 8px;
+  background: #1f2833;
+  border: 1px solid #45a29e;
+  color: #c5c6c7;
+  font-family: inherit;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+.seats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0;
+}
+.seat {
+  width: 60px;
+  height: 44px;
+  border: 1px solid #45a29e;
+  background: #1f2833;
+  color: #c5c6c7;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.seat.taken {
+  background: #662222;
+  border-color: #b22222;
+  cursor: not-allowed;
+}
+.seat.selected {
+  border-color: #66fcf1;
+  box-shadow: 0 0 8px rgba(102, 252, 241, 0.6);
+}
+.actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+.actions button {
+  flex: 1;
+  padding: 10px;
+  background: #1f2833;
+  border: 1px solid #66fcf1;
+  color: #66fcf1;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: bold;
+  cursor: pointer;
+}
+.actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: #45a29e;
+  color: #45a29e;
+}
+.msg {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #ff6b6b;
+  min-height: 18px;
+}
+.seat-label {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  font-size: 14px;
+  letter-spacing: 2px;
+  color: #66fcf1;
+  z-index: 20;
+}
+.status {
+  position: absolute;
+  top: 52px;
+  left: 20px;
+  font-size: 12px;
+  color: #4cd9b3;
+  z-index: 20;
+}
