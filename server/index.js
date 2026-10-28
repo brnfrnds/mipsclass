@@ -4,13 +4,13 @@ const path = require('path');
 const url = require('url');
 const { WebSocketServer } = require('ws');
 const { Room } = require('./room');
+const { handleMessage, drop } = require('./ws');
 const { v4: uuidv4 } = require('uuid');
 
 const publicDir = path.join(__dirname, '..', 'public');
 const realPublic = path.resolve(publicDir);
 
 const rooms = new Map(); // roomId -> Room
-const wsRooms = new Map(); // ws -> { roomId, seatIndex }
 
 function mimeFor(filePath) {
   const ext = path.extname(filePath).toLowerCase();
@@ -92,31 +92,9 @@ function createServer(opts = {}) {
       } catch (e) {
         return;
       }
-      if (parsed.type === 'joinRoom') {
-        const { roomId, seatIndex, name, profilePictureUrl } = parsed;
-        const room = rooms.get(roomId);
-        if (!room) {
-          ws.send(JSON.stringify({ type: 'error', error: 'unknownRoom' }));
-          return;
-        }
-        const player = { id: uuidv4(), name, profilePictureUrl };
-        const res = room.join(seatIndex, player);
-        if (res.error) {
-          ws.send(JSON.stringify({ type: 'error', error: res.error }));
-          return;
-        }
-        wsRooms.set(ws, { roomId, seatIndex: res.player.seatIndex, playerId: res.player.id });
-        ws.send(JSON.stringify({ type: 'joined', player: res.player, state: room.getState() }));
-      }
+      handleMessage(ws, rooms, parsed);
     });
-    ws.on('close', () => {
-      const info = wsRooms.get(ws);
-      if (info) {
-        const room = rooms.get(info.roomId);
-        if (room) room.leave(info.playerId);
-        wsRooms.delete(ws);
-      }
-    });
+    ws.on('close', () => drop(ws));
   });
 
   server.listen(port, () => {
