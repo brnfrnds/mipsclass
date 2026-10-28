@@ -56,3 +56,13 @@ test('Room.setGadget merges into gadgetState without clobbering sibling keys', (
   assert.equal(state.gadgetState.printer.online, true);
   assert.equal(state.gadgetState.board.text, '');
 });
+
+test('Room.addCablePair and getCablePeer', () => {
+  const { Room } = require('../../server/room');
+  const room = new Room(4);
+  room.addCablePair(0, 1, { base: 0x1000, size: 256 });
+  assert.equal(room.getCablePeer(0), 1);
+  assert.equal(room.getCablePeer(1), 0);
+  assert.equal(room.getCablePeer(2), null);
+  assert.deepEqual(room.cablePairs[0].sharedMemory, { base: 0x1000, size: 256 });
+});

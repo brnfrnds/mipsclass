@@ -46,6 +46,19 @@ class Room {
     }
   }
 
+  addCablePair(seatA, seatB, sharedMemory) {
+    if (seatA < 0 || seatA >= this.seatCount) return;
+    if (seatB < 0 || seatB >= this.seatCount) return;
+    if (seatA === seatB) return;
+    this.cablePairs.push({ seatA, seatB, sharedMemory: sharedMemory || { base: 0, size: 0 } });
+  }
+
+  getCablePeer(seatIndex) {
+    const pair = this.cablePairs.find((cp) => cp.seatA === seatIndex || cp.seatB === seatIndex);
+    if (!pair) return null;
+    return pair.seatA === seatIndex ? pair.seatB : pair.seatA;
+  }
+
   getState() {
     return {
       seats: this.seats.slice(),

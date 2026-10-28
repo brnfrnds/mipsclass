@@ -79,14 +79,11 @@ function handleMessage(ws, rooms, parsed) {
     }
 
     case 'cableMessage': {
-      const pair = room.cablePairs.find(
-        (cp) => cp.seatA === info.seatIndex || cp.seatB === info.seatIndex
-      );
-      if (!pair) {
+      const targetSeat = room.getCablePeer(info.seatIndex);
+      if (targetSeat === null) {
         send(ws, { type: 'error', error: 'notCabled' });
         return;
       }
-      const targetSeat = pair.seatA === info.seatIndex ? pair.seatB : pair.seatA;
       for (const [targetWs, tinfo] of wsRooms) {
         if (tinfo.room !== room) continue;
         if (tinfo.seatIndex !== targetSeat) continue;
