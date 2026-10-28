@@ -1,2 +1,78 @@
-// STUB — replaced by Task 6/9 (per-seat terminal)
-console.log('[stub] terminal.js');
+(function (global) {
+  const THREE = global.THREE;
+  const document = global.document;
+
+  function addSeat(scene, index, x, z) {
+    const group = new THREE.Group();
+    group.position.set(x, 0, z);
+
+    // desk surface
+    const desk = new THREE.Mesh(
+      new THREE.BoxGeometry(1.1, 0.05, 0.7),
+      new THREE.MeshStandardMaterial({ color: 0x1a1a1a })
+    );
+    desk.position.y = 0.72;
+    group.add(desk);
+
+    // CRT screen: plane with a CanvasTexture so text can be drawn live
+    const screenCanvas = document.createElement('canvas');
+    screenCanvas.width = 320;
+    screenCanvas.height = 240;
+    const texture = new THREE.CanvasTexture(screenCanvas);
+    const screen = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.2, 0.9),
+      new THREE.MeshBasicMaterial({ map: texture })
+    );
+    screen.position.set(0, 1.05, 0.32);
+    group.add(screen);
+
+    // keyboard
+    const keyboard = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 0.04, 0.5),
+      new THREE.MeshStandardMaterial({ color: 0x222222 })
+    );
+    keyboard.position.set(0, 0.735, -0.08);
+    group.add(keyboard);
+
+    // gadget sprite placeholder (printer/display board) to the right of the screen
+    const gadget = new THREE.Mesh(
+      new THREE.BoxGeometry(0.45, 0.45, 0.3),
+      new THREE.MeshStandardMaterial({ color: 0x444444 })
+    );
+    gadget.position.set(0.72, 0.9, 0.05);
+    group.add(gadget);
+
+    scene.add(group);
+
+    return {
+      group,
+      screen,
+      texture,
+      screenCanvas,
+      seatIndex: index,
+      x,
+      z,
+    };
+  }
+
+  function updateScreen(seat, text) {
+    const ctx = seat.screenCanvas.getContext('2d');
+    ctx.fillStyle = '#050505';
+    ctx.fillRect(0, 0, seat.screenCanvas.width, seat.screenCanvas.height);
+    ctx.fillStyle = '#0a0';
+    ctx.font = '18px monospace';
+    const lines = String(text == null ? '' : text).split('\n');
+    lines.forEach((line, i) => {
+      ctx.fillText(line, 12, 26 + i * 22);
+    });
+    seat.texture.needsUpdate = true;
+  }
+
+  const mod = { addSeat, updateScreen };
+  if (typeof module === 'object' && module.exports) {
+    module.exports = mod;
+  } else {
+    global.addSeat = addSeat;
+    global.updateScreen = updateScreen;
+  }
+})(typeof window !== 'undefined' ? window : global);
