@@ -45,7 +45,7 @@ function json(res, status, obj) {
 }
 
 function createServer(opts = {}) {
-  const port = opts.port || 3000;
+  const port = opts.port !== undefined ? opts.port : 3000;
   const server = http.createServer(async (req, res) => {
     const reqUrl = url.parse(req.url);
 
@@ -61,6 +61,26 @@ function createServer(opts = {}) {
       } catch (e) {
         json(res, 400, { error: 'bad request' });
       }
+      return;
+    }
+
+    // Room state for the join screen's seat grid
+    if (req.method === 'GET' && reqUrl.pathname.startsWith('/rooms/')) {
+      const roomId = reqUrl.pathname.slice('/rooms/'.length);
+      const room = rooms.get(roomId);
+      if (!room) {
+        json(res, 404, { error: 'unknownRoom' });
+        return;
+      }
+      const state = room.getState();
+      json(res, 200, {
+        roomId,
+        seatCount: room.seatCount,
+        seats: state.seats,
+        players: Array.from(state.players.values()),
+        gadgetState: state.gadgetState,
+        cablePairs: state.cablePairs,
+      });
       return;
     }
 

@@ -33,6 +33,85 @@
     seats.forEach((s) => updateGadget(s, summary));
   }
 
+  // ---- Join screen flow ----
+  function wireJoinUI(net, players) {
+    const $ = (id) => document.getElementById(id);
+    const joinEl = $('join'), hudEl = $('hud'), seatsEl = $('seats'), msgEl = $('msg');
+    const roomIdInput = $('roomId');
+    let selectedSeat = null;
+    let currentRoomId = null;
+
+    function renderSeats(count, takenArr) {
+      seatsEl.innerHTML = '';
+      selectedSeat = null;
+      $('btnSit').disabled = true;
+      for (let i = 0; i < count; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'seat' + (takenArr[i] ? ' taken' : '');
+        cell.textContent = String(i + 1);
+        if (!takenArr[i]) {
+          cell.onclick = () => {
+            Array.from(seatsEl.children).forEach((c) => c.classList.remove('selected'));
+            cell.classList.add('selected');
+            selectedSeat = i;
+            $('btnSit').disabled = false;
+          };
+        }
+        seatsEl.appendChild(cell);
+      }
+    }
+
+    async function loadRoom(id) {
+      const res = await fetch(`/rooms/${id}`);
+      if (!res.ok) { msgEl.textContent = 'Room not found'; return; }
+      const state = await res.json();
+      currentRoomId = id;
+      roomIdInput.value = id;
+      renderSeats(state.seatCount, state.seats);
+      msgEl.textContent = '';
+    }
+
+    $('btnCreate').onclick = async () => {
+      const seatCount = parseInt($('seatCount').value, 10) || 4;
+      const res = await fetch('/rooms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ seatCount }),
+      });
+      const { roomId } = await res.json();
+      await loadRoom(roomId);
+    };
+
+    $('btnJoin').onclick = () => {
+      const id = roomIdInput.value.trim();
+      if (id) loadRoom(id);
+    };
+
+    $('btnSit').onclick = () => {
+      if (selectedSeat === null || !currentRoomId) return;
+      net.send({
+        type: 'joinRoom',
+        roomId: currentRoomId,
+        seatIndex: selectedSeat,
+        name: $('playerName').value || 'Operator',
+        profilePictureUrl: $('profilePic').value,
+      });
+    };
+
+    net.on('joined', (m) => {
+      joinEl.classList.add('hidden');
+      hudEl.classList.remove('hidden');
+      $('seatNum').textContent = String(m.player.seatIndex + 1);
+      players.add(m.player); // own sprite too
+    });
+
+    net.on('error', (m) => {
+      msgEl.textContent = m.error === 'seatTaken'
+        ? 'That seat was just taken — pick another.'
+        : `Join failed: ${m.error}`;
+    });
+  }
+
   // App wiring (ES modules: net client, gadgets, MIPS editor, remote players).
   Promise.all([
     import('./js/net.js'),
@@ -40,6 +119,8 @@
     import('./js/editor.js'),
     import('./js/players.js'),
   ]).then(([net, gadgets, { mountEditor }, players]) => {
+    net.connect();
+
     players.initPlayers({ scene, seats });
 
     // Remote player events (server is the source of truth).
@@ -57,6 +138,7 @@
       refreshGadgetVisuals(gadgets.getModel());
     });
 
+    wireJoinUI(net, players);
     mountEditor({ container: document.body });
   }).catch((err) => console.error('app wiring failed:', err));
 })();
