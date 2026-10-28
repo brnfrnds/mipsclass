@@ -21,8 +21,12 @@
 
   animate();
 
-  // Expose for later tasks (net/players/gadgets/editor wiring).
   window.__officeSeats = seats;
   window.__officeScene = scene;
   window.__officeCamera = camera;
+
+  // Mount the MIPS editor overlay (ES module, loaded on demand, no CDN).
+  import('./js/editor.js').then(({ mountEditor }) => {
+    mountEditor({ container: document.body });
+  }).catch((err) => console.error('editor load failed:', err));
 })();
