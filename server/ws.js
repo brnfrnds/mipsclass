@@ -60,11 +60,7 @@ function handleMessage(ws, rooms, parsed) {
     case 'gadgetUpdate': {
       const gadget = parsed.gadget || {};
       for (const [key, value] of Object.entries(gadget)) {
-        if (room.gadgetState[key]) {
-          room.gadgetState[key] = { ...room.gadgetState[key], ...value };
-        } else {
-          room.gadgetState[key] = value;
-        }
+        room.setGadget(key, value);
       }
       broadcast(room, { type: 'gadgetState', gadgetState: room.gadgetState });
       break;

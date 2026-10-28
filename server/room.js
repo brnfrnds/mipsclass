@@ -38,6 +38,14 @@ class Room {
     this.players.delete(playerId);
   }
 
+  setGadget(key, value) {
+    if (!this.gadgetState[key]) {
+      this.gadgetState[key] = value;
+    } else {
+      this.gadgetState[key] = { ...this.gadgetState[key], ...value };
+    }
+  }
+
   getState() {
     return {
       seats: this.seats.slice(),

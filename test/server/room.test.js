@@ -46,3 +46,13 @@ test('Room.getState returns gadgetState and cablePairs', () => {
   assert.equal(state.gadgetState.board.text, '');
   assert.deepEqual(state.cablePairs, []);
 });
+
+test('Room.setGadget merges into gadgetState without clobbering sibling keys', () => {
+  const { Room } = require('../../server/room');
+  const room = new Room(2);
+  room.setGadget('printer', { text: 'HELLO' });
+  const state = room.getState();
+  assert.equal(state.gadgetState.printer.text, 'HELLO');
+  assert.equal(state.gadgetState.printer.online, true);
+  assert.equal(state.gadgetState.board.text, '');
+});
