@@ -34,10 +34,15 @@
     keyboard.position.set(0, 0.735, -0.08);
     group.add(keyboard);
 
-    // gadget sprite placeholder (printer/display board) to the right of the screen
+    // gadget sprite (printer / display board) to the right of the screen,
+    // with its own canvas texture so shared gadget state can be shown on it
+    const gadgetCanvas = document.createElement('canvas');
+    gadgetCanvas.width = 256;
+    gadgetCanvas.height = 128;
+    const gadgetTexture = new THREE.CanvasTexture(gadgetCanvas);
     const gadget = new THREE.Mesh(
       new THREE.BoxGeometry(0.45, 0.45, 0.3),
-      new THREE.MeshStandardMaterial({ color: 0x444444 })
+      new THREE.MeshBasicMaterial({ map: gadgetTexture })
     );
     gadget.position.set(0.72, 0.9, 0.05);
     group.add(gadget);
@@ -49,6 +54,9 @@
       screen,
       texture,
       screenCanvas,
+      gadget,
+      gadgetTexture,
+      gadgetCanvas,
       seatIndex: index,
       x,
       z,
@@ -68,11 +76,26 @@
     seat.texture.needsUpdate = true;
   }
 
-  const mod = { addSeat, updateScreen };
+  /** Draw a gadget summary (e.g. printer + board state) on a seat's gadget sprite. */
+  function updateGadget(seat, text) {
+    const ctx = seat.gadgetCanvas.getContext('2d');
+    ctx.fillStyle = '#101010';
+    ctx.fillRect(0, 0, seat.gadgetCanvas.width, seat.gadgetCanvas.height);
+    ctx.fillStyle = '#fc0';
+    ctx.font = '16px monospace';
+    const lines = String(text == null ? '' : text).split('\n');
+    lines.forEach((line, i) => {
+      ctx.fillText(line, 8, 22 + i * 20);
+    });
+    seat.gadgetTexture.needsUpdate = true;
+  }
+
+  const mod = { addSeat, updateScreen, updateGadget };
   if (typeof module === 'object' && module.exports) {
     module.exports = mod;
   } else {
     global.addSeat = addSeat;
     global.updateScreen = updateScreen;
+    global.updateGadget = updateGadget;
   }
 })(typeof window !== 'undefined' ? window : global);

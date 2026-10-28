@@ -1,4 +1,5 @@
 import { makeMipsFromFiles, registerHandlers, StopReason } from './lib/mips-core.mjs';
+import { GADGET_IO, write as gadgetWrite } from './gadgets.js';
 
 const STOP_REASON_NAME = {
   [-1]: 'NONE',
@@ -9,6 +10,11 @@ const STOP_REASON_NAME = {
   5: 'PAUSE',
   6: 'STOP',
 };
+
+// Memory-write observers live on the shared simulator memory and survive
+// assemble()/initialize(), so the gadget observers are registered exactly once
+// per page — on the first MipsSim instance — and apply to every later one.
+let gadgetObserversRegistered = false;
 
 export class MipsSim {
   constructor(source, entryFile = 'main.asm') {
@@ -30,6 +36,17 @@ export class MipsSim {
         if (this.onScreenOutput) this.onScreenOutput(text);
       },
     });
+
+    if (!gadgetObserversRegistered) {
+      for (const base of [GADGET_IO.PRINTER_BASE, GADGET_IO.BOARD_BASE, GADGET_IO.CONTROLLER_BASE]) {
+        this.mips.addMemoryWriteObserver(
+          base,
+          base + GADGET_IO.GADGET_RANGE,
+          (address, length, value) => gadgetWrite(address, value)
+        );
+      }
+      gadgetObserversRegistered = true;
+    }
   }
 
   setSource(source) {
