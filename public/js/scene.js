@@ -107,7 +107,7 @@
     scene.background = new THREE.Color(PALETTE.night);
     if (THREE.Fog) scene.fog = new THREE.Fog(PALETTE.night, 11, 26);
 
-    camera = new THREE.PerspectiveCamera(55, width / height, 0.1, 100);
+    camera = new THREE.PerspectiveCamera(62, width / height, 0.1, 100);
     camera.position.set(0, 3.4, 7.2);
     camera.lookAt(0, 1.0, 0);
 

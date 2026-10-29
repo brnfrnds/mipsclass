@@ -69,26 +69,26 @@ function makeHumanoid(seatIndex) {
   const g = new THREE.Group();
 
   // chair (raised posture — the operator sits up where the table can see them)
-  part(0.5, 0.07, 0.5, 0x3E3A32, 0, 0.66, 0.12, g);
-  part(0.5, 0.5, 0.07, 0x3E3A32, 0, 0.94, 0.4, g);
-  part(0.07, 0.66, 0.07, 0x2E2A24, -0.2, 0.33, 0.12, g);
-  part(0.07, 0.66, 0.07, 0x2E2A24, 0.2, 0.33, 0.12, g);
+  part(0.5, 0.07, 0.5, 0x3E3A32, 0, 0.74, 0.12, g);
+  part(0.5, 0.5, 0.07, 0x3E3A32, 0, 1.02, 0.4, g);
+  part(0.07, 0.74, 0.07, 0x2E2A24, -0.2, 0.37, 0.12, g);
+  part(0.07, 0.74, 0.07, 0x2E2A24, 0.2, 0.37, 0.12, g);
 
   // legs: thighs forward, shins down (longer — feet stay on the floor)
-  part(0.13, 0.13, 0.42, 0x37322B, -0.1, 0.7, -0.14, g);
-  part(0.13, 0.13, 0.42, 0x37322B, 0.1, 0.7, -0.14, g);
-  part(0.11, 0.66, 0.11, 0x37322B, -0.1, 0.33, -0.3, g);
-  part(0.11, 0.66, 0.11, 0x37322B, 0.1, 0.33, -0.3, g);
+  part(0.13, 0.13, 0.42, 0x37322B, -0.1, 0.78, -0.14, g);
+  part(0.13, 0.13, 0.42, 0x37322B, 0.1, 0.78, -0.14, g);
+  part(0.11, 0.74, 0.11, 0x37322B, -0.1, 0.37, -0.3, g);
+  part(0.11, 0.74, 0.11, 0x37322B, 0.1, 0.37, -0.3, g);
 
-  // torso, head, hair — seated head height ~1.35
-  part(0.4, 0.52, 0.24, shirt, 0, 0.96, 0, g);
-  part(0.26, 0.26, 0.26, skin, 0, 1.35, 0, g);
-  part(0.28, 0.09, 0.28, 0x2E2016, 0, 1.505, 0, g);
+  // torso, head, hair — seated head height ~1.43
+  part(0.4, 0.52, 0.24, shirt, 0, 1.04, 0, g);
+  part(0.26, 0.26, 0.26, skin, 0, 1.43, 0, g);
+  part(0.28, 0.09, 0.28, 0x2E2016, 0, 1.585, 0, g);
 
   // arms: pivot at the shoulder, resting reach toward the keyboard
   function arm(side) {
     const pivot = new THREE.Group();
-    pivot.position.set(0.25 * side, 1.16, 0);
+    pivot.position.set(0.25 * side, 1.24, 0);
     part(0.1, 0.44, 0.1, shirt, 0, -0.2, 0, pivot);
     part(0.09, 0.1, 0.09, skin, 0, -0.44, 0, pivot);
     if (pivot.rotation) pivot.rotation.x = 1.15;
@@ -151,7 +151,7 @@ export function add(player, opts = {}) {
   let sprite = null;
   if (!opts.isSelf) {
     sprite = makeSprite(player);
-    sprite.position.set(0, 1.6, 0.95); // just above the head, seat's frame
+    sprite.position.set(0, 1.66, 0.95); // just above the head, seat's frame
     seat.group.add(sprite);
   }
 
