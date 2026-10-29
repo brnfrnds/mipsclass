@@ -131,16 +131,25 @@
     });
   }
 
-  // App wiring (ES modules: net client, gadgets, MIPS editor, office staff).
+  // App wiring (ES modules: net, gadgets, editor, staff, reference, sound).
   Promise.all([
     import('./net.js'),
     import('./gadgets.js'),
     import('./editor.js'),
     import('./players.js'),
-  ]).then(([net, gadgets, { mountEditor }, players]) => {
+    import('./reference.js'),
+    import('./sound.js'),
+  ]).then(([net, gadgets, { mountEditor }, players, { mountReference }, sound]) => {
     net.connect();
 
+    // browsers start the AudioContext suspended until a gesture
+    const wake = () => sound.resumeAudio();
+    document.addEventListener('click', wake, { once: true });
+    document.addEventListener('keydown', wake, { once: true });
+
     players.initPlayers({ scene, seats, tableTop: table.top, tableRadius: table.radius });
+
+    const ref = mountReference({ container: document.body });
 
     function sitDown(player) {
       // Your camera glides behind your own avatar — the whole table in view.
@@ -169,7 +178,7 @@
     net.on('playerJoined', (m) => players.add(m.player));
     net.on('playerLeft', (m) => players.remove(m.seatIndex));
     net.on('playerTyping', (m) => players.setTyping(m.seatIndex, m.typing));
-    net.on('playerBlownUp', (m) => players.explode(m.seatIndex));
+    net.on('playerBlownUp', (m) => { players.explode(m.seatIndex); sound.boom(); });
 
     // Local gadget writes: instant 3D feedback (gadgets.js already reports to the server).
     gadgets.onWrite((key, model) => refreshGadgetVisuals(model));
@@ -182,14 +191,34 @@
 
     wireJoinUI(net, players);
 
-    // Editor starts hidden; it opens when you sit, and the HUD has a toggle.
-    const editor = mountEditor({ container: document.body });
+    // Editor starts hidden; it opens when you sit, and the HUD has toggles.
+    const editor = mountEditor({ container: document.body, teletype: true });
     editor.hide();
+    editor.onRef = () => ref.toggle();
     net.on('joined', () => editor.show());
+    net.on('joined', (m) => { if (m.operator) editor.setOperator(); });
     const hudBtn = document.createElement('button');
     hudBtn.className = 'hud-editor-btn';
     hudBtn.textContent = 'Editor';
     hudBtn.onclick = () => editor.show();
     document.getElementById('hud').appendChild(hudBtn);
+
+    const refBtn = document.createElement('button');
+    refBtn.className = 'hud-editor-btn';
+    refBtn.textContent = 'Reference';
+    refBtn.style.top = '58px';
+    refBtn.onclick = () => ref.toggle();
+    document.getElementById('hud').appendChild(refBtn);
+
+    const muteBtn = document.createElement('button');
+    muteBtn.className = 'hud-editor-btn';
+    muteBtn.textContent = 'Sound: On';
+    muteBtn.style.top = '100px';
+    muteBtn.onclick = () => {
+      const m = !sound.isMuted();
+      sound.setMuted(m);
+      muteBtn.textContent = m ? 'Sound: Off' : 'Sound: On';
+    };
+    document.getElementById('hud').appendChild(muteBtn);
   }).catch((err) => console.error('app wiring failed:', err));
 })();
