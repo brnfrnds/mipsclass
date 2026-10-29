@@ -367,6 +367,7 @@ html, body {
 
 /* the HUD editor toggle — a plastic key */
 #hud .hud-editor-btn {
+  pointer-events: auto;
   position: absolute;
   top: 16px;
   right: 16px;
