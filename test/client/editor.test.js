@@ -17,7 +17,7 @@ function makeEl(tag) {
     addEventListener: noop, removeEventListener: noop, remove: noop,
   };
 }
-global.document = { createElement: (t) => (t === 'canvas' ? makeCanvas() : makeEl(t)), addEventListener: noop, removeEventListener: noop };
+global.document = { createElement: (t) => (t === 'canvas' ? makeCanvas() : makeEl(t)), addEventListener: noop, removeEventListener: noop, body: makeEl('body') };
 
 // shared fake socket — the editor's netSend goes through the real net module
 const fake = {
@@ -40,8 +40,9 @@ test('an assembly error also blows up the computer (blowUp sent office-wide)', a
   fake.sent.length = 0;
   const { Editor } = await import('../../public/js/editor.js');
   const ed = new Editor({ container: makeEl('div') });
-  ed.ta.value = 'this is definitely not valid mips';
-  ed._run(); // asm fails → should send blowUp like a runtime crash does
+  ed._enter('D 1-6');
+  ed._enter('I 1 THIS IS DEFINITELY NOT VALID MIPS');
+  ed._enter('SUBMIT');
   const blowups = fake.sent.filter((m) => m.type === 'blowUp');
   assert.equal(blowups.length, 1, 'asm error sends exactly one blowUp');
 });
@@ -52,8 +53,7 @@ test('a clean program sends no blowUp', async () => {
   fake.sent.length = 0;
   const { Editor } = await import('../../public/js/editor.js');
   const ed = new Editor({ container: makeEl('div') });
-  ed.ta.value = 'li $a0, 42';
-  ed._run();
+  ed._enter('SUBMIT'); // the hello-world template is clean
   await new Promise((r) => setTimeout(r, 400)); // let the run settle
   assert.equal(fake.sent.filter((m) => m.type === 'blowUp').length, 0, 'no crash on valid code');
 });

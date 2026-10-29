@@ -117,6 +117,14 @@ export class MipsSim {
     return this.mips.readMemoryBytes(addr, length);
   }
 
+  statementsAt(line) {
+    return this.mips.getStatementsAtSourceLocation(this.entryFile, line);
+  }
+
+  addressOfLabel(name) {
+    return this.mips.getAddressOfLabel(name);
+  }
+
   getScreenOutput() {
     return this._screen;
   }

@@ -1,0 +1,63 @@
+const { test } = require('node:test');
+const assert = require('node:assert');
+
+test('parseCommand uppercases, trims, and splits a command', async () => {
+  const { parseCommand } = await import('../../public/js/editor.js');
+  assert.deepEqual(parseCommand('  l 3-7  '), { cmd: 'L', args: ['3-7'] });
+  assert.deepEqual(parseCommand('i 5 hello world'), { cmd: 'I', args: ['5', 'HELLO WORLD'] });
+  assert.deepEqual(parseCommand('submit'), { cmd: 'SUBMIT', args: [] });
+  assert.deepEqual(parseCommand('   '), null, 'blank input is not a command');
+});
+
+test('parseCommand keeps argument text intact apart from casing', async () => {
+  const { parseCommand } = await import('../../public/js/editor.js');
+  assert.deepEqual(parseCommand('c 2 add $t0, $t1, $t2  '), { cmd: 'C', args: ['2', 'ADD $T0, $T1, $T2'] });
+});
+
+test('Deck starts empty and appends with A', async () => {
+  const { Deck } = await import('../../public/js/editor.js');
+  const d = new Deck();
+  assert.equal(d.count(), 0);
+  d.append('LDX 1');
+  d.append('STX 2');
+  assert.equal(d.count(), 2);
+  assert.equal(d.line(1), 'LDX 1');
+  assert.equal(d.line(2), 'STX 2');
+});
+
+test('I inserts before a line; I at count+1 appends', async () => {
+  const { Deck } = await import('../../public/js/editor.js');
+  const d = new Deck();
+  d.append('A1'); d.append('A2');
+  d.insertBefore(1, 'FIRST');
+  assert.equal(d.line(1), 'FIRST');
+  d.insertBefore(3, 'LAST');
+  assert.equal(d.line(3), 'LAST');
+  assert.throws(() => d.insertBefore(9, 'NOPE'), /out of range/i);
+});
+
+test('C replaces a line; D deletes a line and a range; ranges are 1-based inclusive', async () => {
+  const { Deck } = await import('../../public/js/editor.js');
+  const d = new Deck();
+  ['ONE', 'TWO', 'THREE', 'FOUR'].forEach((l) => d.append(l));
+  d.change(2, 'TWO!');
+  assert.equal(d.line(2), 'TWO!');
+  d.deleteRange(3, 3);
+  assert.equal(d.count(), 3);
+  assert.equal(d.line(3), 'FOUR');
+  d.deleteRange(1, 2);
+  assert.equal(d.count(), 1);
+  assert.throws(() => d.deleteRange(5, 6), /out of range/i);
+});
+
+test('T returns the top ten lines; L range returns a slice with numbers', async () => {
+  const { Deck } = await import('../../public/js/editor.js');
+  const d = new Deck();
+  for (let i = 1; i <= 14; i++) d.append('LINE ' + i);
+  const top = d.top();
+  assert.equal(top.length, 10);
+  assert.equal(top[0], '     1  LINE 1');
+  const range = d.format(3, 4);
+  assert.deepEqual(range, ['     3  LINE 3', '     4  LINE 4']);
+  assert.throws(() => d.format(20, 30), /out of range/i);
+});
