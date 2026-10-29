@@ -203,6 +203,12 @@
     hudBtn.onclick = () => editor.show();
     document.getElementById('hud').appendChild(hudBtn);
 
+    // your CRT mirrors your terminal's glass
+    editor.onGlass = (rows) => {
+      const my = seats.find((s) => s.seatIndex === mySeatIndex);
+      if (my) updateScreen(my, rows.join('\n'));
+    };
+
     const refBtn = document.createElement('button');
     refBtn.className = 'hud-editor-btn';
     refBtn.textContent = 'Reference';

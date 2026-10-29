@@ -2,8 +2,6 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 
 // --- minimal DOM stubs so the Editor can run in node ---
-// Elements track children + aggregate textContent + a working classList,
-// enough for the terminal's print/fold logic to be tested for real.
 function noop() {}
 function makeCanvas() {
   return {
@@ -30,8 +28,6 @@ function makeEl(tag) {
       toggle(c, force) { const on = force === undefined ? !set.has(c) : !!force; if (on) set.add(c); else set.delete(c); return on; },
     },
     querySelectorAll(sel) {
-      // generic class matcher: '.a.b' matches elements with both classes;
-      // '.fold-head[data-section="X"]' also requires dataset.section === X
       const parts = sel.split('.').filter(Boolean).map((p) => {
         const m = p.match(/^([^\[]+)\[data-section="([^"]+)"\]$/);
         return m ? { cls: m[1], section: m[2] } : { cls: p };
@@ -58,15 +54,6 @@ const fake = {
   readyState: 1, sent: [],
   send: (s) => fake.sent.push(JSON.parse(s)),
 };
-
-function findButton(el, label) {
-  for (const c of el.children) {
-    if (c.tag === 'button' && c.textContent === label) return c;
-    const nested = findButton(c, label);
-    if (nested) return nested;
-  }
-  return null;
-}
 
 test('an assembly error also blows up the computer (blowUp sent office-wide)', async () => {
   const net = await import('../../public/js/net.js');
@@ -102,47 +89,42 @@ test('the editor queues through the mainframe: SUBMIT holds until jobRunning, th
   const ed = new Editor({ container: makeEl('div'), teletype: false });
   ed._enter('SUBMIT');
 
-  // the submission went out and the editor is now outstanding-locked
   const submits = fake.sent.filter((m) => m.type === 'submitJob');
   assert.equal(submits.length, 1, 'SUBMIT sends a submitJob message');
   assert.ok(submits[0].lineCount > 0, 'with a line count');
   assert.equal(ed.statusEl.textContent.includes('QUEUED'), true, 'status shows the queue');
 
-  // a second SUBMIT is refused while outstanding
   ed._enter('SUBMIT');
   assert.equal(fake.sent.filter((m) => m.type === 'submitJob').length, 1, 'one outstanding job');
 
-  // the queue calls the job: the listing prints, the status clears on jobDone
   ed.onMessage({ type: 'jobRunning', jobId: 1 });
-  assert.ok(ed.out.textContent.includes('=== SOURCE ==='), 'listing printed on jobRunning');
+  assert.ok(document.body.textContent.includes('=== SOURCE ==='), 'listing printed onto the paper card');
   ed.onMessage({ type: 'jobDone', jobId: 1 });
-  assert.equal(ed.statusEl.textContent, 'READY', 'ready after the job clears');
+  assert.ok(ed.statusEl.textContent.startsWith('READY'), 'ready after the job clears');
 });
 
-test('listing sections print with fold headers; folded sections can open', async () => {
+test('listing sections print onto the paper card with fold headers; folds open', async () => {
   const net = await import('../../public/js/net.js');
   net.setSocket(fake);
   const { Editor } = await import('../../public/js/editor.js');
   const ed = new Editor({ container: makeEl('div'), teletype: false });
   ed._enter('SUBMIT');
   ed.onMessage({ type: 'jobRunning', jobId: 1 });
-  const text = ed.out.textContent;
+  const text = document.body.textContent;
   assert.ok(text.includes('=== SOURCE ==='), 'source header');
   assert.ok(text.includes('=== MACHINE CODE'), 'machine section');
   assert.ok(text.includes('=== SYMBOLS'), 'symbols section');
   assert.ok(text.includes('== ASSEMBLY CLEAN =='), 'clean verdict (template assembles)');
 
-  // machine + symbols print folded; source prints open
-  const machineLines = ed.out.querySelectorAll('.foldable.section-MACHINE');
+  const machineLines = document.body.querySelectorAll('.pc-line.pc-sec-MACHINE');
   assert.ok(machineLines.length > 0, 'machine lines exist');
-  assert.ok(machineLines.every((f) => f.classList.contains('folded')), 'machine lines start folded');
-  const sourceLines = ed.out.querySelectorAll('.foldable.section-SOURCE');
-  assert.ok(sourceLines.length > 0 && sourceLines.every((f) => !f.classList.contains('folded')), 'source lines start open');
+  assert.ok(machineLines.every((f) => f.classList.contains('pc-folded')), 'machine lines start folded');
+  const sourceLines = document.body.querySelectorAll('.pc-line.pc-sec-SOURCE');
+  assert.ok(sourceLines.length > 0 && sourceLines.every((f) => !f.classList.contains('pc-folded')), 'source lines start open');
 
-  // folding: clicking the machine header opens it
-  const machineHeader = [...ed.out.querySelectorAll('.fold-head[data-section="MACHINE"]')][0];
+  const machineHeader = [...document.body.querySelectorAll('.pc-fold-head[data-section="MACHINE"]')][0];
   machineHeader.click();
-  assert.ok(machineLines.every((f) => !f.classList.contains('folded')), 'fold opens on click');
+  assert.ok(machineLines.every((f) => !f.classList.contains('pc-folded')), 'fold opens on click');
 });
 
 test('a killed job prints JOB CANCELLED and frees the editor', async () => {
@@ -154,26 +136,23 @@ test('a killed job prints JOB CANCELLED and frees the editor', async () => {
   ed._enter('SUBMIT');
   ed.onMessage({ type: 'jobKilled', jobId: 1 });
   assert.ok(ed.out.textContent.includes('JOB CANCELLED'), 'cancellation printed');
-  assert.equal(ed.statusEl.textContent, 'READY', 'editor freed');
+  assert.ok(ed.statusEl.textContent.startsWith('READY'), 'editor freed');
   ed._enter('SUBMIT'); // can submit again
   assert.equal(fake.sent.filter((m) => m.type === 'submitJob').length, 2);
 });
 
-test('plain terminal traffic is always visible (the boot banner and L output)', async () => {
+test('plain terminal traffic is always visible on the glass (the boot banner and L output)', async () => {
   const net = await import('../../public/js/net.js');
   net.setSocket(fake);
   const { Editor } = await import('../../public/js/editor.js');
   const ed = new Editor({ container: makeEl('div'), teletype: false });
-  // the boot banner must be visible (not swallowed by the fold system)
   assert.ok(ed.out.textContent.includes('MIPSDOS LINE EDITOR'), 'boot banner visible');
   assert.ok(ed.out.textContent.includes('DECK LOADED'), 'banner second line visible');
-  // L output: numbered lines, visible, NOT foldable-hidden
   ed._enter('L');
-  const lines = [...ed.out.querySelectorAll('.terminal-line')].filter((d) => d.textContent.trim().startsWith('1'));
-  assert.ok(lines.length > 0, 'the L listing printed');
-  assert.ok(lines.every((d) => !d.classList.contains('folded')), 'plain output is never folded');
-  // and it is not marked foldable at all
-  assert.ok(lines.every((d) => !d.classList.contains('foldable')), 'plain output is not foldable');
+  assert.ok(ed.out.textContent.includes('LI $v0, 4'), 'the L listing printed on the glass (registers keep their case)');
+  const rows = ed.out.querySelectorAll('.terminal-row');
+  assert.equal(rows.length, 24, 'the glass is exactly 24 rows');
+  assert.ok(rows.every((d) => !d.classList.contains('folded')), 'glass rows are never folded');
 });
 
 test('createTypingPulse sends typing true on press and false after idle', async () => {

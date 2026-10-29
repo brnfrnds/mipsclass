@@ -1,8 +1,49 @@
 import { MipsSim } from './mips.js';
-import { resetAndSync } from './gadgets.js';
+import { resetAndSync, cardListing, cardOutput } from './gadgets.js';
 import * as net from './net.js';
 import * as sound from './sound.js';
 
+// ---------------------------------------------------------------------------
+// The glass: authentic character grids. 80x24 = a VT-100, 80x25 = the IBM PC
+// text mode, 40x25 = the C64's screen. Text wraps at the column count and
+// the screen scrolls when the rows run out — exactly like the real glass.
+// ---------------------------------------------------------------------------
+export const SCREEN_MODES = [
+  { cols: 80, rows: 24, tag: 'VT-80' },
+  { cols: 80, rows: 25, tag: 'PC-80' },
+  { cols: 40, rows: 25, tag: 'C64-40' },
+];
+
+export const CARD_COLUMNS = 80; // a punch card holds 80 columns — the deck obeys
+
+export class Screen {
+  constructor(cols = 80, rows = 24) {
+    this.resize(cols, rows);
+  }
+
+  resize(cols, rows) {
+    this.cols = cols;
+    this.rowCount = rows;
+    this.cursor = 0; // the write head — row 0 on a fresh screen
+    this.rows = [];
+    for (let i = 0; i < rows; i++) this.rows.push(' '.repeat(cols));
+  }
+
+  clear() { this.resize(this.cols, this.rowCount); }
+
+  writeLine(text) {
+    const t = String(text);
+    for (let i = 0; i < t.length; i += this.cols) {
+      const chunk = t.slice(i, i + this.cols);
+      if (this.cursor >= this.rowCount) {
+        this.rows.shift(); // the glass scrolls one line
+        this.cursor--;
+      }
+      this.rows[this.cursor] = chunk + ' '.repeat(this.cols - chunk.length);
+      this.cursor++;
+    }
+  }
+}
 // ---------------------------------------------------------------------------
 // Command parsing: everything is uppercased (the teletype had no lowercase)
 // — EXCEPT register tokens: MARS register names ($v0, $t1…) are case-sensitive
@@ -38,18 +79,24 @@ export class Deck {
   count() { return this.lines.length; }
   line(n) { this._check(n); return this.lines[n - 1]; }
 
-  append(text) { this.lines.push(upperLine(text)); }
+  _store(text) {
+    const t = upperLine(text);
+    if (t.length > CARD_COLUMNS) throw new Error('LINE TOO LONG — CARDS HOLD 80 COLUMNS');
+    return t;
+  }
+
+  append(text) { this.lines.push(this._store(text)); }
 
   insertBefore(n, text) {
     if (!Number.isInteger(n) || n < 1 || n > this.lines.length + 1) {
       throw new Error(`LINE ${n} OUT OF RANGE`);
     }
-    this.lines.splice(n - 1, 0, upperLine(text));
+    this.lines.splice(n - 1, 0, this._store(text));
   }
 
   change(n, text) {
     this._check(n);
-    this.lines[n - 1] = upperLine(text);
+    this.lines[n - 1] = this._store(text);
   }
 
   deleteRange(a, b) {
@@ -157,10 +204,13 @@ export class Editor {
     header.appendChild(hint);
     this.el.appendChild(header);
 
-    // the output pane: the teletype paper (scrolling)
+    // the output pane: the glass — a real character grid (80x24 to start)
     this.out = document.createElement('div');
     this.out.className = 'terminal-out';
     this.el.appendChild(this.out);
+    this.screen = new Screen(SCREEN_MODES[0].cols, SCREEN_MODES[0].rows);
+    this.modeIndex = 0;
+    this.onGlass = null; // main.js mirrors the glass onto the operator's own CRT
 
     // the status line: queue position etc.
     this.statusEl = document.createElement('div');
@@ -191,10 +241,10 @@ export class Editor {
     this.deck = new Deck();
     ['.DATA', 'HELLO: .ASCIIZ "HELLO WORLD"', '.TEXT', '  LI $V0, 4', '  LA $A0, HELLO', '  SYSCALL', '  LI $V0, 10', '  SYSCALL'].forEach((l) => this.deck.append(l));
     this.inserting = null; // null, or the line number inserting before
-    this.outstanding = null; // the queued job's id (phase ②)
+    this.outstanding = null; // the queued job's id
     this.awaitingJob = false; // submit sent, jobQueued not yet received
     this.myJobId = null;
-    this.folds = { SOURCE: true, MACHINE: false, SYMBOLS: false }; // section open?
+    this.pendingDeck = null;
 
     const pulse = createTypingPulse((m) => net.send(m));
     this.cmd.addEventListener('input', () => { pulse(); sound.clack(); });
@@ -338,6 +388,12 @@ export class Editor {
         case 'T':
           this.print(this.deck.top());
           break;
+        case 'MODE': {
+          this.cycleMode();
+          this.print([`GLASS SET TO ${this.modeTag} — ${this.screen.cols} COLUMNS × ${this.screen.rowCount} ROWS`]);
+          this._status();
+          break;
+        }
         case 'KILL':
         case 'BUMP': {
           const jobId = parseInt(args[0], 10);
@@ -365,15 +421,16 @@ export class Editor {
   }
 
   _status() {
+    const mode = ` — ${this.modeTag} ${this.screen.cols}×${this.screen.rowCount}`;
     if (this.outstanding !== null || this.awaitingJob) {
       const ahead = Math.max(0, (this.position || 1) - 1);
       this.statusEl.textContent = this.awaitingJob
         ? 'JOB SUBMITTED — QUEUED, ASSIGNING'
-        : `JOB #${this.outstanding} — QUEUED, ${ahead} AHEAD`;
+        : `JOB #${this.outstanding} — QUEUED, ${ahead} AHEAD${mode}`;
     } else if (this.inserting !== null) {
-      this.statusEl.textContent = `.INSERT MODE — BEFORE LINE ${this.inserting}; '.' ENDS`;
+      this.statusEl.textContent = `.INSERT MODE — BEFORE LINE ${this.inserting}; '.' ENDS${mode}`;
     } else {
-      this.statusEl.textContent = 'READY';
+      this.statusEl.textContent = 'READY' + mode;
     }
   }
 
@@ -421,6 +478,7 @@ export class Editor {
       net.send({ type: 'blowUp' });
       return;
     }
+    sim.onScreenOutput = (t) => cardOutput(t); // the program's output prints onto the card too
     sim.run().then(
       (res) => this.print(['[STOPPED: ' + res.reason + ']']),
       (err) => {
@@ -435,57 +493,40 @@ export class Editor {
    * Foldable section headers are printed as .fold-head divs; their lines
    * carry .foldable and the section class, hidden while the section is folded.
    */
-  /** Plain terminal traffic: echoes, listings on demand, banners. Always visible. */
+  /** Plain terminal traffic: echoes, listings on demand, banners. Onto the glass. */
   print(lines) {
-    for (const line of lines) {
+    for (const line of lines) this.screen.writeLine(line);
+    this.renderGlass();
+  }
+
+  /** Paint the glass: 24 (or 25) rows of exactly `cols` characters each. */
+  renderGlass() {
+    this.out.textContent = '';
+    for (const row of this.screen.rows) {
       const div = document.createElement('div');
-      div.className = 'terminal-line';
-      div.textContent = line;
+      div.className = 'terminal-row';
+      div.textContent = row;
       this.out.appendChild(div);
     }
-    this.out.scrollTop = this.out.scrollHeight;
+    if (this.onGlass) this.onGlass(this.screen.rows);
   }
 
-  /**
-   * The assembler listing: foldable by section, printed teletype-style.
-   * Section headers are [+/−] toggles; SOURCE prints open, others folded.
-   */
+  /** The assembler listing prints onto the operator's own paper card. */
   printListing(lines) {
-    let section = null;
-    lines.forEach((line, i) => {
-      if (line.startsWith('=== ')) section = line.replace(/===|\(/g, '').trim().split(' ')[0];
-      const sec = section; // per-line capture — the closure must not see the loop's end state
-      const emit = () => {
-        const isFoldHead = line.startsWith('=== ');
-        if (this.teletype) sound.teletypeTick();
-        const div = document.createElement('div');
-        if (isFoldHead) {
-          div.className = 'terminal-line fold-head';
-          div.dataset.section = sec;
-          div.textContent = (this.folds[sec] ? '[−] ' : '[+] ') + line;
-          div.onclick = () => this._toggleFold(sec);
-        } else {
-          div.className = 'terminal-line foldable section-' + sec + (this.folds[sec] ? '' : ' folded');
-          div.textContent = line;
-        }
-        this.out.appendChild(div);
-        this.out.scrollTop = this.out.scrollHeight;
-      };
-      if (this.teletype) setTimeout(emit, i * 66);
-      else emit();
-    });
+    cardListing(lines, this.teletype);
   }
 
-  _toggleFold(section) {
-    this.folds[section] = !this.folds[section];
-    const heads = this.out.querySelectorAll('.fold-head[data-section="' + section + '"]');
-    heads.forEach((h) => {
-      h.textContent = (this.folds[section] ? '[−] ' : '[+] ') + '=== ' + section + ' ===';
-    });
-    this.out.querySelectorAll('.foldable.section-' + section).forEach((el) => {
-      el.classList.toggle('folded', !this.folds[section]);
-    });
+  /** Cycle the glass through the historic modes, keeping the text. */
+  cycleMode() {
+    this.modeIndex = (this.modeIndex + 1) % SCREEN_MODES.length;
+    const mode = SCREEN_MODES[this.modeIndex];
+    const keep = this.screen.rows.map((r) => r.trimEnd()).filter((r) => r.trim());
+    this.screen.resize(mode.cols, mode.rows);
+    for (const row of keep) this.screen.writeLine(row);
+    this.renderGlass();
   }
+
+  get modeTag() { return SCREEN_MODES[this.modeIndex].tag; }
 
   setStatus(text) {
     this.outstanding = text;

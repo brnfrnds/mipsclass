@@ -101,19 +101,23 @@
     for (let y = 0; y < h; y += 4) ctx.fillRect(0, y, w, 1);
   }
 
-  /** Phosphor CRT: near-black tube, green text with a soft double-print glow. */
+  /** Phosphor CRT: a real character grid — 80 columns × 24 rows of cells. */
   function updateScreen(seat, text) {
+    const W = 640, H = 400; // 80 cells × 8px, 24 rows × 16px + margins
+    seat.screenCanvas.width = W;
+    seat.screenCanvas.height = H;
     const ctx = seat.screenCanvas.getContext('2d');
     ctx.fillStyle = '#04140A';
-    ctx.fillRect(0, 0, seat.screenCanvas.width, seat.screenCanvas.height);
-    paintScanlines(ctx, seat.screenCanvas.width, seat.screenCanvas.height);
-    ctx.font = '18px monospace';
-    const lines = String(text == null ? '' : text).split('\n');
-    lines.forEach((line, i) => {
-      ctx.fillStyle = 'rgba(53,255,110,0.35)';
-      ctx.fillText(line, 13, 28 + i * 22);
-      ctx.fillStyle = '#35FF6E';
-      ctx.fillText(line, 12, 26 + i * 22);
+    ctx.fillRect(0, 0, W, H);
+    // scanlines every 4px
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    for (let y = 0; y < H; y += 4) ctx.fillRect(0, y, W, 1);
+    // the glass: every row is a full 80-cell line
+    ctx.fillStyle = '#35FF6E';
+    ctx.font = '14px monospace';
+    const rows = String(text == null ? '' : text).split('\n').slice(0, 24);
+    rows.forEach((row, i) => {
+      ctx.fillText(row.slice(0, 80), 10, 24 + i * 16);
     });
     seat.texture.needsUpdate = true;
   }

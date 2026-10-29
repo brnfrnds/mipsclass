@@ -8,6 +8,7 @@
 // office-shared: every write is reported to the server as a gadgetUpdate so
 // every client sees the same wall board.
 import { send } from './net.js';
+import * as sound from './sound.js';
 
 export const GADGET_IO = {
   PRINTER_BASE: 0x10030000,
@@ -28,6 +29,8 @@ const writeListeners = []; // (gadgetKey) => void, fired on LOCAL writes
 let cardEl = null;
 let cardTextEl = null;
 let cardDismissed = false;
+let cardOutEl = null; // the program's output lines (after the listing)
+const cardFolds = { SOURCE: true, MACHINE: false, SYMBOLS: false };
 
 function ensureCard() {
   if (cardEl || typeof document === 'undefined') return; // node tests: no DOM
@@ -57,15 +60,73 @@ function ensureCard() {
 function renderCard() {
   if (cardDismissed) return;
   ensureCard();
-  if (!cardEl || !cardTextEl) return; // node tests: no DOM
-  cardTextEl.textContent = model.printer.text;
-  cardTextEl.scrollTop = cardTextEl.scrollHeight;
+  if (!cardEl) return; // node tests: no DOM
   cardEl.style.display = 'flex';
 }
 
 function dismissCard() {
   cardDismissed = true;
   if (cardEl) cardEl.style.display = 'none';
+}
+
+/**
+ * The job's printout: the assembler listing printed onto the paper card
+ * line-by-line (teletype pace), sections foldable on the paper itself.
+ */
+export function cardListing(lines, paced = true) {
+  if (typeof document === 'undefined') return; // node tests: no DOM
+  ensureCard();
+  cardDismissed = false;
+  renderCard();
+  cardTextEl.textContent = '';
+  let section = null;
+  lines.forEach((line, i) => {
+    if (line.startsWith('=== ')) section = line.replace(/===|\(/g, '').trim().split(' ')[0];
+    const sec = section;
+    const emit = () => {
+      sound.teletypeTick();
+      const isHead = line.startsWith('=== ');
+      const div = document.createElement('div');
+      if (isHead) {
+        div.className = 'pc-fold-head';
+        div.dataset.section = sec;
+        div.textContent = (cardFolds[sec] ? '[−] ' : '[+] ') + line;
+        div.onclick = () => toggleCardFold(sec);
+      } else {
+        div.className = 'pc-line pc-sec-' + sec + (cardFolds[sec] ? '' : ' pc-folded');
+        div.textContent = line;
+      }
+      cardTextEl.appendChild(div);
+      cardTextEl.scrollTop = cardTextEl.scrollHeight;
+    };
+    if (paced) setTimeout(emit, i * 66);
+    else emit();
+  });
+}
+
+function toggleCardFold(section) {
+  cardFolds[section] = !cardFolds[section];
+  if (!cardTextEl) return;
+  cardTextEl.querySelectorAll('.pc-fold-head[data-section="' + section + '"]').forEach((h) => {
+    h.textContent = (cardFolds[section] ? '[−] ' : '[+] ') + '=== ' + section + ' ===';
+  });
+  cardTextEl.querySelectorAll('.pc-sec-' + section).forEach((el) => {
+    el.classList.toggle('pc-folded', !cardFolds[section]);
+  });
+}
+
+/** The program's own output as it prints (chars stream onto the card). */
+export function cardOutput(text) {
+  if (typeof document === 'undefined' || !cardTextEl) return;
+  cardDismissed = false;
+  renderCard();
+  if (!cardOutEl || !cardOutEl.isConnected) {
+    cardOutEl = document.createElement('div');
+    cardOutEl.className = 'pc-output';
+    cardTextEl.appendChild(cardOutEl);
+  }
+  cardOutEl.textContent += text;
+  cardTextEl.scrollTop = cardTextEl.scrollHeight;
 }
 
 function sendGadgetUpdate(gadget) {
@@ -78,6 +139,7 @@ export function write(address, value) {
     model.printer.text += ch;
     cardDismissed = false; // fresh ink un-dismisses the card
     renderCard();
+    sound.printerBuzz();
     fireWrite('printer');
     return 'printer';
   }
