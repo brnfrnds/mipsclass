@@ -79,6 +79,18 @@ test('the editor cycles display modes with MODE and keeps the content', async ()
   assert.ok(ed.statusEl.textContent.includes('VT-80'), 'the status shows the mode tag');
 });
 
+test('the glass box resizes in character units with the mode', async () => {
+  const net = await import('../../public/js/net.js');
+  net.setSocket({ readyState: 1, sent: [], send: () => {} });
+  const { Editor } = await import('../../public/js/editor.js');
+  const ed = new Editor({ container: makeEl('div'), teletype: false });
+  ed._enter('MODE'); // 80x25
+  assert.ok(ed.out.style.width.includes('80ch'), '80-column glass: ' + ed.out.style.width);
+  ed._enter('MODE'); // now at C64-40 (two modes total)
+  assert.ok(ed.out.style.width.includes('40ch'), 'the C64 glass is visibly narrower: ' + ed.out.style.width);
+  assert.ok(ed.out.style.height.includes('25'), '25 rows tall');
+});
+
 test('the deck rejects lines longer than 80 columns (punch-card width)', async () => {
   const { Deck } = await import('../../public/js/editor.js');
   const d = new Deck();

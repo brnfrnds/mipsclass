@@ -499,7 +499,7 @@ export class Editor {
     this.renderGlass();
   }
 
-  /** Paint the glass: 24 (or 25) rows of exactly `cols` characters each. */
+  /** Paint the glass: a bezel opening sized in CHARACTER units — cols × rows. */
   renderGlass() {
     this.out.textContent = '';
     for (const row of this.screen.rows) {
@@ -508,6 +508,9 @@ export class Editor {
       div.textContent = row;
       this.out.appendChild(div);
     }
+    // the visible glass hugs the grid: N columns wide, M rows tall
+    this.out.style.width = `calc(${this.screen.cols}ch + 26px)`;
+    this.out.style.height = `calc(${this.screen.rowCount} * 1.15em + 22px)`;
     if (this.onGlass) this.onGlass(this.screen.rows);
   }
 
