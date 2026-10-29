@@ -25,18 +25,16 @@ test('net.js exposes send/on and routes incoming JSON by type', async () => {
   assert.equal(got[0].gadgetState.printer.text, 'X');
 });
 
-test('gadget write accumulates printer text and emits gadgetUpdate', async () => {
+test('printer writes stay PRIVATE: model updates locally, nothing is sent', async () => {
   const net = await import('../../public/js/net.js');
   net.setSocket(fake);
+  fake.sent.length = 0;
   const { GADGET_IO, write, getModel, reset } = await import('../../public/js/gadgets.js');
   reset();
-  const where = write(GADGET_IO.PRINTER_BASE, 72); // 'H'
-  assert.equal(where, 'printer');
+  assert.equal(write(GADGET_IO.PRINTER_BASE, 72), 'printer'); // 'H'
   write(GADGET_IO.PRINTER_BASE + 1, 73); // 'I'
   assert.equal(getModel().printer.text, 'HI');
-  const upd = fake.sent.filter((s) => s.type === 'gadgetUpdate');
-  assert.ok(upd.length >= 2);
-  assert.equal(upd[upd.length - 1].gadget.printer.text, 'HI');
+  assert.equal(fake.sent.filter((m) => m.type === 'gadgetUpdate').length, 0, 'printer is private — no broadcast');
 });
 
 test('board and controller writes land on their own gadgets', async () => {
@@ -50,9 +48,10 @@ test('board and controller writes land on their own gadgets', async () => {
   assert.ok('w0' in m.controller);
 });
 
-test('MIPS store to printer MMIO range triggers gadget write via memory observer', async () => {
+test('MIPS store to printer MMIO range updates the local printout without broadcasting', async () => {
   const net = await import('../../public/js/net.js');
   net.setSocket(fake);
+  fake.sent.length = 0;
   const { MipsSim } = await import('../../public/js/mips.js');
   const { GADGET_IO, getModel, reset } = await import('../../public/js/gadgets.js');
   reset();
@@ -65,17 +64,35 @@ test('MIPS store to printer MMIO range triggers gadget write via memory observer
   assert.ok(sim.assembleOk());
   await sim.run();
   assert.equal(getModel().printer.text, 'HI');
-  const upd = fake.sent.filter((s) => s.type === 'gadgetUpdate');
-  assert.ok(upd.length >= 1, 'gadgetUpdate should be sent');
-  assert.equal(upd[upd.length - 1].gadget.printer.text, 'HI');
+  assert.equal(fake.sent.filter((m) => m.type === 'gadgetUpdate').length, 0, 'printouts stay private');
 });
 
-test('applyState merges a server gadgetState broadcast into the local model', async () => {
-  const { applyState, getModel, reset } = await import('../../public/js/gadgets.js');
+test('resetAndSync clears the local printout but only broadcasts the shared gadgets', async () => {
+  const net = await import('../../public/js/net.js');
+  net.setSocket(fake);
+  fake.sent.length = 0;
+  const { GADGET_IO, write, getModel, resetAndSync } = await import('../../public/js/gadgets.js');
+  write(GADGET_IO.PRINTER_BASE, 65); // 'A'
+  write(GADGET_IO.BOARD_BASE, 66);   // 'B'
+  resetAndSync();
+  const m = getModel();
+  assert.equal(m.printer.text, '', 'local printout cleared');
+  assert.equal(m.board.text, '', 'shared board cleared');
+  const upd = fake.sent.filter((x) => x.type === 'gadgetUpdate');
+  assert.equal(upd.length, 2, 'the board write + the shared clear (printer never sends)');
+  assert.deepEqual(upd[1].gadget, { board: { text: '' }, controller: {} }, 'only shared gadgets in the clear');
+});
+
+test('applyState merges shared gadget broadcasts; the printer stays private', async () => {
+  const net = await import('../../public/js/net.js');
+  net.setSocket(fake);
+  fake.sent.length = 0;
+  const { GADGET_IO, write, applyState, getModel, reset } = await import('../../public/js/gadgets.js');
   reset();
+  write(GADGET_IO.PRINTER_BASE, 65); // local printout 'A' — must survive the broadcast
   applyState({ printer: { text: 'FROM SERVER' }, board: { text: 'BOARD!' } });
   const m = getModel();
-  assert.equal(m.printer.text, 'FROM SERVER');
-  assert.equal(m.board.text, 'BOARD!');
-  assert.equal(m.printer.online, true, 'sibling keys preserved');
+  assert.equal(m.board.text, 'BOARD!', 'shared board merges');
+  assert.equal(m.board.online, true, 'sibling keys preserved');
+  assert.equal(m.printer.text, 'A', 'printer ignores server state — it is private');
 });

@@ -383,6 +383,66 @@ html, body {
   cursor: pointer;
   box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.4);
 }
+
+/* ---------- the private printout: a paper card, always on top ---------- */
+.printer-card {
+  position: fixed;
+  top: 70px;
+  right: 16px;
+  z-index: 100; /* above the editor (50) — a fresh printout is always on top */
+  width: 300px;
+  max-height: 62vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  border: 1px solid #B9AE93;
+  box-shadow: 6px 8px 0 rgba(0, 0, 0, 0.45), inset 0 0 40px rgba(122, 79, 38, 0.06);
+  color: var(--ink);
+}
+.printer-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px 8px;
+  border-bottom: 2px dashed rgba(122, 79, 38, 0.4); /* the tear line */
+}
+.printer-card-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--teak);
+}
+.printer-card-tear {
+  padding: 3px 10px;
+  background: transparent;
+  border: 1px solid var(--ink);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.printer-card-tear:hover {
+  background: var(--paper-dim);
+  transform: translate(1px, 1px);
+}
+.printer-card-paper {
+  margin: 0;
+  padding: 12px 14px;
+  overflow: auto;
+  flex: 1;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: 'Courier Prime', monospace;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink);
+  background:
+    repeating-linear-gradient(to bottom, transparent, transparent 21px, rgba(122, 79, 38, 0.18) 21px, rgba(122, 79, 38, 0.18) 22px);
+}
 #hud .hud-editor-btn:hover {
   background: var(--paper-dim);
   transform: translate(1px, 1px);

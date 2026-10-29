@@ -46,11 +46,16 @@
   window.__officeScene = scene;
   window.__officeCamera = camera;
 
-  /** Printer text prints on every seat's paper; board text hits the wall board. */
+  let mySeatIndex = null; // your seat — set when you sit down; papers are private
+
+  /** Your printout paints only YOUR seat's paper; board text hits the wall board. */
   function refreshGadgetVisuals(model) {
     const printerText = model.printer.text || '';
     const boardText = model.board.text || '';
-    seats.forEach((s) => updateGadget(s, printerText));
+    if (mySeatIndex !== null) {
+      const mySeat = seats.find((s) => s.seatIndex === mySeatIndex);
+      if (mySeat) updateGadget(mySeat, printerText);
+    }
     if (board && board.paint) board.paint(boardText);
   }
 
@@ -141,6 +146,7 @@
       // Your camera glides behind your own avatar — the whole table in view.
       const spot = layout[player.seatIndex] || layout[0];
       if (typeof setCameraAnchor === 'function') setCameraAnchor(spot.cam.pos, spot.cam.target);
+      mySeatIndex = player.seatIndex;
       document.getElementById('join').classList.add('hidden');
       document.getElementById('hud').classList.remove('hidden');
       document.getElementById('seatNum').textContent = String(player.seatIndex + 1);
