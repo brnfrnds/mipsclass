@@ -1,16 +1,26 @@
 // The office staff: when a player joins, a low-poly humanoid takes their
 // seat around the round table — shirt color by seat, arms that bang on the
 // keyboard while they type, a name/photo sprite over their head, and an
-// explosion at their terminal when they blow up. The server is the source
-// of truth for who is typing, who left, who blew up.
+// explosion when their MIPS program blows up: the terminal and the operator
+// hop on a smooth parabola while debris flies ballistic arcs and bounces.
+// The server is the source of truth for who is typing, who left, who blew up.
 const THREE = globalThis.THREE;
 
 let scene = null;
 let seats = [];
 let tableTop = 1.06; // seat-group origins sit at this world height
+let tableRadius = 1.9;
 const states = new Map(); // seatIndex -> { humanoid, sprite, armL, armR, keyboard, baseY, typing, bobT }
-const explosions = []; // { meshes, velocities, born }
+const explosions = [];
 let ticking = false;
+
+// Explosion tuning — all animation is time-based (dt from timestamps), so it
+// plays identically at any frame rate.
+const PARTICLE_TTL = 2200;   // ms — slower, lingers
+const GRAVITY = 3.2;         // u/s² — floaty game debris, not real physics
+const JUMP_MS = 520;         // ms — the hop up and back down
+const RESTITUTION = 0.35;    // bounce energy kept on landing
+const FLOOR_MARGIN = 16;     // (bytes) observer-range margin, kept for reference
 
 const SHIRTS = [0xC17A3F, 0xB4552E, 0x6B7A3F, 0x7A5A6E, 0x4E6E58, 0x8A6D3B];
 const SKINS = [0xE8B48C, 0xC68863, 0x8C5A3C, 0x6B4226];
@@ -23,25 +33,19 @@ function startTick() {
 
 function tick() {
   const now = Date.now();
+  for (let i = explosions.length - 1; i >= 0; i--) {
+    const ex = explosions[i];
+    if (stepExplosion(ex, now)) {
+      ex.meshes.forEach((m) => scene.remove(m));
+      explosions.splice(i, 1);
+    }
+  }
   for (const st of states.values()) {
     if (st.typing) {
       st.bobT += 0.15; // slow, watchable cycle
       if (st.armL && st.armL.rotation) st.armL.rotation.x = 1.15 + Math.sin(st.bobT) * 0.5; // wild swings
       if (st.armR && st.armR.rotation) st.armR.rotation.x = 1.15 + Math.sin(st.bobT + Math.PI) * 0.5;
       if (st.keyboard && st.keyboard.position) st.keyboard.position.y = st.baseY + Math.abs(Math.sin(st.bobT * 2)) * 0.012;
-    }
-  }
-  for (let i = explosions.length - 1; i >= 0; i--) {
-    const ex = explosions[i];
-    for (const m of ex.meshes) {
-      m.position.x += ex.velocities.get(m).x;
-      m.position.y += ex.velocities.get(m).y;
-      m.position.z += ex.velocities.get(m).z;
-      m.material.opacity = Math.max(0, m.material.opacity - 0.02);
-    }
-    if (now - ex.born > 1400) {
-      ex.meshes.forEach((m) => scene.remove(m));
-      explosions.splice(i, 1);
     }
   }
   requestAnimationFrame(tick);
@@ -61,12 +65,15 @@ function part(w, h, d, color, x, y, z, parent) {
 
 /**
  * A seated humanoid facing −z (toward their terminal and the table center).
- * Returns the group plus the two arm pivots so typing can animate them.
+ * The body lives in its own sub-group so an explosion can hop it without
+ * lifting the chair. Returns the group, the body, and the two arm pivots.
  */
 function makeHumanoid(seatIndex) {
   const shirt = SHIRTS[seatIndex % SHIRTS.length];
   const skin = SKINS[seatIndex % SKINS.length];
   const g = new THREE.Group();
+  const body = new THREE.Group();
+  g.add(body);
 
   // chair (raised posture — the operator sits up where the table can see them)
   part(0.5, 0.07, 0.5, 0x3E3A32, 0, 0.74, 0.12, g);
@@ -75,15 +82,15 @@ function makeHumanoid(seatIndex) {
   part(0.07, 0.74, 0.07, 0x2E2A24, 0.2, 0.37, 0.12, g);
 
   // legs: thighs forward, shins down (longer — feet stay on the floor)
-  part(0.13, 0.13, 0.42, 0x37322B, -0.1, 0.78, -0.14, g);
-  part(0.13, 0.13, 0.42, 0x37322B, 0.1, 0.78, -0.14, g);
-  part(0.11, 0.74, 0.11, 0x37322B, -0.1, 0.37, -0.3, g);
-  part(0.11, 0.74, 0.11, 0x37322B, 0.1, 0.37, -0.3, g);
+  part(0.13, 0.13, 0.42, 0x37322B, -0.1, 0.78, -0.14, body);
+  part(0.13, 0.13, 0.42, 0x37322B, 0.1, 0.78, -0.14, body);
+  part(0.11, 0.74, 0.11, 0x37322B, -0.1, 0.37, -0.3, body);
+  part(0.11, 0.74, 0.11, 0x37322B, 0.1, 0.37, -0.3, body);
 
   // torso, head, hair — seated head height ~1.43
-  part(0.4, 0.52, 0.24, shirt, 0, 1.04, 0, g);
-  part(0.26, 0.26, 0.26, skin, 0, 1.43, 0, g);
-  part(0.28, 0.09, 0.28, 0x2E2016, 0, 1.585, 0, g);
+  part(0.4, 0.52, 0.24, shirt, 0, 1.04, 0, body);
+  part(0.26, 0.26, 0.26, skin, 0, 1.43, 0, body);
+  part(0.28, 0.09, 0.28, 0x2E2016, 0, 1.585, 0, body);
 
   // arms: pivot at the shoulder, resting reach toward the keyboard
   function arm(side) {
@@ -92,13 +99,13 @@ function makeHumanoid(seatIndex) {
     part(0.1, 0.44, 0.1, shirt, 0, -0.2, 0, pivot);
     part(0.09, 0.1, 0.09, skin, 0, -0.44, 0, pivot);
     if (pivot.rotation) pivot.rotation.x = 1.15;
-    g.add(pivot);
+    body.add(pivot);
     return pivot;
   }
   const armL = arm(-1);
   const armR = arm(1);
 
-  return { group: g, armL, armR };
+  return { group: g, body, armL, armR };
 }
 
 /** Billboard sprite with the player's name and (if it loads) profile picture. */
@@ -136,6 +143,7 @@ export function initPlayers(opts) {
   scene = opts.scene;
   seats = opts.seats || [];
   tableTop = opts.tableTop !== undefined ? opts.tableTop : 1.06;
+  tableRadius = opts.tableRadius !== undefined ? opts.tableRadius : 1.9;
   startTick();
 }
 
@@ -193,26 +201,92 @@ export function isTyping(seatIndex) {
   return Boolean(st && st.typing);
 }
 
-/** Particle burst at the seat's terminal; meshes clean up after ~1.4s. */
+/**
+ * The terminal explodes: debris erupts in an upward-biased dome around the
+ * computer, the CRT and the operator hop, everything settles smoothly.
+ * All motion is time-based — stepExplosion integrates real elapsed time.
+ */
 export function explode(seatIndex) {
   if (!scene) return;
   const seat = seatAt(seatIndex);
   if (!seat) return;
+  const born = Date.now();
   const meshes = [];
   const velocities = new Map();
-  for (let i = 0; i < 30; i++) {
+
+  for (let i = 0; i < 34; i++) {
     const m = new THREE.Mesh(
-      new THREE.BoxGeometry(0.06, 0.06, 0.06),
+      new THREE.BoxGeometry(0.07, 0.07, 0.07),
       new THREE.MeshBasicMaterial({ color: i % 2 ? 0xff5500 : 0xffaa00, transparent: true, opacity: 1 })
     );
-    m.position.set(seat.x, tableTop + 0.35, seat.z);
+    // spawn in a disc around the computer, launch on an upward-biased dome
+    const angle = Math.random() * Math.PI * 2;
+    const ring = Math.random() * 0.32;
+    m.position.set(
+      seat.x + Math.cos(angle) * ring,
+      tableTop + 0.42,
+      seat.z + Math.sin(angle) * ring
+    );
+    const speed = 1.1 + Math.random() * 1.1;                  // slow, heavy debris
+    const elev = (0.35 + Math.random() * 0.5) * Math.PI / 2;  // 30°–75° up
     velocities.set(m, {
-      x: (Math.random() - 0.5) * 0.12,
-      y: Math.random() * 0.14,
-      z: (Math.random() - 0.5) * 0.12,
+      x: Math.cos(angle) * Math.cos(elev) * speed,
+      y: Math.sin(elev) * speed,
+      z: Math.sin(angle) * Math.cos(elev) * speed,
     });
     scene.add(m);
     meshes.push(m);
   }
-  explosions.push({ meshes, velocities, born: Date.now() });
+
+  // the hop: the CRT and the operator's body (not the chair) leap together
+  const jumpers = [];
+  if (seat.crt) jumpers.push({ obj: seat.crt, baseY: seat.crt.position.y, height: 0.3 });
+  const st = states.get(seatIndex);
+  if (st && st.humanoid && st.humanoid.body) {
+    jumpers.push({ obj: st.humanoid.body, baseY: st.humanoid.body.position.y, height: 0.26 });
+  }
+
+  explosions.push({ meshes, velocities, jumpers, born, lastStep: born, floorY: tableTop });
+}
+
+export function lastExplosion() {
+  return explosions[explosions.length - 1] || null;
+}
+
+/**
+ * Advance one explosion by real elapsed time. Returns true once the burst
+ * is over (past its TTL) and the caller may remove the debris.
+ */
+export function stepExplosion(ex, now) {
+  const dt = Math.min((now - ex.lastStep) / 1000, 0.05); // clamp long frames
+  ex.lastStep = now;
+
+  // the hop: y = base + h·4t(1−t) — a parabola with zero velocity at both ends
+  const jt = (now - ex.born) / JUMP_MS;
+  const lift = jt <= 1 ? 4 * jt * (1 - jt) : 0;
+  for (const j of ex.jumpers) {
+    j.obj.position.y = j.baseY + j.height * lift;
+  }
+
+  // debris: semi-implicit Euler ballistics
+  for (const m of ex.meshes) {
+    const v = ex.velocities.get(m);
+    v.y -= GRAVITY * dt;
+    m.position.x += v.x * dt;
+    m.position.y += v.y * dt;
+    m.position.z += v.z * dt;
+
+    // bounce on the tabletop — or on the carpet once past the table's rim
+    const floorY = Math.hypot(m.position.x, m.position.z) > tableRadius ? 0.03 : ex.floorY;
+    if (m.position.y < floorY && v.y < 0) {
+      m.position.y = floorY;
+      v.y = -v.y * RESTITUTION;
+      v.x *= 0.8;
+      v.z *= 0.8;
+    }
+
+    m.material.opacity = Math.max(0, 1 - (now - ex.born) / PARTICLE_TTL);
+  }
+
+  return now - ex.born > PARTICLE_TTL;
 }

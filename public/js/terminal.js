@@ -82,6 +82,7 @@
 
     return {
       group,
+      crt,
       screen,
       texture,
       screenCanvas,

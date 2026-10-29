@@ -44,9 +44,8 @@ global.THREE = {
 };
 global.document = { createElement: makeCanvas };
 global.window = undefined;
-// RAF pump that stops after 400 ticks (~2s at 5ms) so the test process can exit.
-let rafCount = 0;
-global.requestAnimationFrame = (f) => { if (rafCount++ < 400) setTimeout(f, 5); };
+// NO RAF pump: explosion physics is stepped manually in tests (deterministic).
+global.requestAnimationFrame = () => {};
 
 function makeScene() { return new global.THREE.Scene(); }
 function makeSeat(index) {
@@ -56,6 +55,7 @@ function makeSeat(index) {
     z: Math.sin((index * Math.PI) / 2) * 1.38,
     group: new global.THREE.Group(),
     keyboard: new global.THREE.Mesh(),
+    crt: new global.THREE.Mesh(),
   };
 }
 
@@ -63,7 +63,7 @@ test('add seats a humanoid (and sprite for remotes) in the seat group; remove cl
   const players = await import('../../public/js/players.js');
   const scene = makeScene();
   const seat = makeSeat(0);
-  players.initPlayers({ scene, seats: [seat], tableTop: 1.06 });
+  players.initPlayers({ scene, seats: [seat], tableTop: 1.06, tableRadius: 1.9 });
 
   const base = seat.group.children.length;
   players.add({ seatIndex: 0, name: 'Ada', profilePictureUrl: '' }, { isSelf: true });
@@ -80,7 +80,7 @@ test('setTyping toggles and resets the typing state', async () => {
   const players = await import('../../public/js/players.js');
   const scene = makeScene();
   const seat = makeSeat(1);
-  players.initPlayers({ scene, seats: [seat], tableTop: 1.06 });
+  players.initPlayers({ scene, seats: [seat], tableTop: 1.06, tableRadius: 1.9 });
   players.add({ seatIndex: 1, name: 'Bob', profilePictureUrl: '' }, { isSelf: true });
   players.setTyping(1, true);
   assert.equal(players.isTyping(1), true);
@@ -88,16 +88,68 @@ test('setTyping toggles and resets the typing state', async () => {
   assert.equal(players.isTyping(1), false);
 });
 
-test('explode spawns particles in the scene and cleans them up after the burst', async () => {
+test('explode makes the CRT jump on a smooth parabola and land back', async () => {
   const players = await import('../../public/js/players.js');
   const scene = makeScene();
-  const seat = makeSeat(2);
-  players.initPlayers({ scene, seats: [seat], tableTop: 1.06 });
-  players.add({ seatIndex: 2, name: 'Cal', profilePictureUrl: '' }, { isSelf: true });
-  const before = scene.children.length;
-  players.explode(2);
-  assert.equal(scene.children.length, before + 30, '30 particles spawned');
-  // let the RAF pump run past the 1.4s particle TTL
-  await new Promise((r) => setTimeout(r, 2100));
-  assert.equal(scene.children.length, before, 'particles cleaned up');
+  const seat = makeSeat(0);
+  players.initPlayers({ scene, seats: [seat], tableTop: 1.06, tableRadius: 1.9 });
+  players.add({ seatIndex: 0, name: 'Ada', profilePictureUrl: '' }, { isSelf: true });
+
+  players.explode(0);
+  const ex = players.lastExplosion();
+  const baseY = seat.crt.position.y;
+
+  players.stepExplosion(ex, ex.born + 260); // mid-jump (half of the 520ms hop)
+  const midY = seat.crt.position.y;
+  assert.ok(midY > baseY + 0.15, `CRT is airborne mid-jump (y ${midY} vs base ${baseY})`);
+
+  players.stepExplosion(ex, ex.born + 700); // landed
+  assert.equal(seat.crt.position.y, baseY, 'CRT lands back exactly');
 });
+
+test('debris follows time-based ballistics: two 100ms steps equal four 50ms steps', async () => {
+  const players = await import('../../public/js/players.js');
+  const scene = makeScene();
+  players.initPlayers({ scene, seats: [makeSeat(0)], tableTop: 1.06, tableRadius: 1.9 });
+  players.add({ seatIndex: 0, name: 'Ada', profilePictureUrl: '' }, { isSelf: true });
+
+  // same controlled velocity in two explosions
+  players.explode(0);
+  const a = players.lastExplosion();
+  const pa = a.meshes[0];
+  Object.assign(a.velocities.get(pa), { x: 1, y: 2, z: 0 });
+  players.stepExplosion(a, a.born + 50);
+  players.stepExplosion(a, a.born + 100);
+
+  players.explode(0);
+  const b = players.lastExplosion();
+  const pb = b.meshes[0];
+  Object.assign(b.velocities.get(pb), { x: 1, y: 2, z: 0 });
+  players.stepExplosion(b, b.born + 25);
+  players.stepExplosion(b, b.born + 50);
+  players.stepExplosion(b, b.born + 75);
+  players.stepExplosion(b, b.born + 100);
+
+  // same trajectory within integration error
+  assert.ok(Math.abs(pa.position.x - pb.position.x) < 0.01, 'x matches');
+  assert.ok(Math.abs(pa.position.y - pb.position.y) < 0.01, 'y matches (gravity integrated)');
+  assert.ok(Math.abs(pa.position.z - pb.position.z) < 0.01, 'z matches');
+});
+
+test('debris fades with time and the explosion reports dead past its TTL', async () => {
+  const players = await import('../../public/js/players.js');
+  const scene = makeScene();
+  players.initPlayers({ scene, seats: [makeSeat(0)], tableTop: 1.06, tableRadius: 1.9 });
+  players.add({ seatIndex: 0, name: 'Ada', profilePictureUrl: '' }, { isSelf: true });
+
+  players.explode(0);
+  const ex = players.lastExplosion();
+  players.stepExplosion(ex, ex.born + 1100); // halfway through the 2.2s TTL
+  assert.ok(ex.meshes[0].material.opacity > 0.4 && ex.meshes[0].material.opacity < 0.6, 'half-faded at half-life');
+  players.stepExplosion(ex, ex.born + 1200);
+  assert.equal(players.lastExplosion(), ex, 'still alive before TTL');
+  const dead = players.stepExplosion(ex, ex.born + 2400); // past the TTL
+  assert.equal(dead, true, 'reported dead past TTL');
+  assert.equal(ex.meshes[0].material.opacity, 0, 'faded fully');
+});
+

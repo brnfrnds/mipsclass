@@ -135,7 +135,7 @@
   ]).then(([net, gadgets, { mountEditor }, players]) => {
     net.connect();
 
-    players.initPlayers({ scene, seats, tableTop: table.top });
+    players.initPlayers({ scene, seats, tableTop: table.top, tableRadius: table.radius });
 
     function sitDown(player) {
       // Your camera glides behind your own avatar — the whole table in view.
