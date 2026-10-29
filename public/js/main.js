@@ -114,10 +114,10 @@
 
   // App wiring (ES modules: net client, gadgets, MIPS editor, remote players).
   Promise.all([
-    import('./js/net.js'),
-    import('./js/gadgets.js'),
-    import('./js/editor.js'),
-    import('./js/players.js'),
+    import('./net.js'),
+    import('./gadgets.js'),
+    import('./editor.js'),
+    import('./players.js'),
   ]).then(([net, gadgets, { mountEditor }, players]) => {
     net.connect();
 
@@ -139,6 +139,18 @@
     });
 
     wireJoinUI(net, players);
-    mountEditor({ container: document.body });
+
+    // Editor starts hidden; it opens when you sit, and the HUD has a toggle.
+    const editor = mountEditor({ container: document.body });
+    editor.hide();
+    net.on('joined', () => editor.show());
+    const hudBtn = document.createElement('button');
+    hudBtn.textContent = 'Editor';
+    hudBtn.style.cssText =
+      'position:absolute; top:16px; right:16px; z-index:30; padding:8px 14px; ' +
+      'background:#1f2833; border:1px solid #66fcf1; color:#66fcf1; ' +
+      'font-family:inherit; cursor:pointer;';
+    hudBtn.onclick = () => editor.show();
+    document.getElementById('hud').appendChild(hudBtn);
   }).catch((err) => console.error('app wiring failed:', err));
 })();
