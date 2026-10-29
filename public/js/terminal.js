@@ -2,37 +2,23 @@
   const THREE = global.THREE;
   const document = global.document;
 
+  // Heights are relative to the tabletop surface, which the seat group's
+  // origin sits on (main.js places the group and picks the world spot).
+  const DESK = 0; // group origin = tabletop surface
+
   function addSeat(scene, index, x, z) {
     const group = new THREE.Group();
-    group.position.set(x, 0, z);
+    group.position.set(x, DESK, z);
 
     const beige = new THREE.MeshStandardMaterial({ color: 0xD6CCB4, roughness: 0.7 });
     const beigeDark = new THREE.MeshStandardMaterial({ color: 0xC2B79D, roughness: 0.75 });
     const carbon = new THREE.MeshStandardMaterial({ color: 0x201C18, roughness: 0.6 });
-    const paperMat = new THREE.MeshStandardMaterial({ color: 0xF2ECDC, roughness: 0.9 });
 
     function guarded(mesh) {
       if ('castShadow' in mesh) mesh.castShadow = true;
       return mesh;
     }
-
-    // --- desk: wood top on beige steel legs ---
-    const woodTop = new THREE.Mesh(
-      new THREE.BoxGeometry(1.9, 0.07, 0.95),
-      new THREE.MeshStandardMaterial({ color: 0x8A5A2B, roughness: 0.7 })
-    );
-    woodTop.position.set(0, 0.75, 0.12);
-    group.add(guarded(woodTop));
-    group.add(guarded((() => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.75, 0.85), beigeDark);
-      m.position.set(-0.88, 0.375, 0.1);
-      return m;
-    })()));
-    group.add(guarded((() => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.75, 0.85), beigeDark);
-      m.position.set(0.88, 0.375, 0.1);
-      return m;
-    })()));
+    function at(mesh, x, y, z) { mesh.position.set(x, y, z); return mesh; }
 
     // --- CRT terminal: beige casing, dark bezel, recessed phosphor screen ---
     const screenCanvas = document.createElement('canvas');
@@ -45,77 +31,48 @@
     );
 
     const crt = new THREE.Group();
-    crt.add(guarded((() => {
-      const body = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.8, 0.62), beige);
-      body.position.set(0, 0.4, 0);
-      return body;
-    })()));
-    crt.add(guarded((() => {
-      const bezel = new THREE.Mesh(new THREE.BoxGeometry(0.88, 0.66, 0.05), carbon);
-      bezel.position.set(0, 0.42, 0.3);
-      return bezel;
-    })()));
+    crt.add(guarded(at(new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.8, 0.62), beige), 0, 0.4, 0)));
+    crt.add(at(new THREE.Mesh(new THREE.BoxGeometry(0.88, 0.66, 0.05), carbon), 0, 0.42, 0.3));
     screen.position.set(0, 0.42, 0.335);
     crt.add(screen);
-    const led = new THREE.Mesh(
-      new THREE.BoxGeometry(0.035, 0.035, 0.02),
-      new THREE.MeshBasicMaterial({ color: 0x35FF6E })
-    );
-    led.position.set(0.4, 0.13, 0.315);
-    crt.add(led);
-    // vents on the top shell
+    crt.add(at(new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, 0.02), new THREE.MeshBasicMaterial({ color: 0x35FF6E })), 0.4, 0.13, 0.315));
     for (let i = 0; i < 4; i++) {
-      const vent = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.01, 0.02), carbon);
-      vent.position.set(0, 0.805, 0.12 + i * 0.09);
-      crt.add(vent);
+      crt.add(at(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.01, 0.02), carbon), 0, 0.805, 0.12 + i * 0.09));
     }
-    crt.position.set(0, 0.785, 0.12);
+    crt.position.set(0, 0, -0.18); // casing base rests on the tabletop
     group.add(crt);
 
-    // --- keyboard: beige slab, dark key rows, space bar ---
-    const keyboard = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.05, 0.42), beigeDark);
-    keyboard.position.set(0, 0.795, 0.72);
+    // --- keyboard in front of the sitter, on the table ---
+    const keyboard = at(new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.05, 0.42), beigeDark), 0, 0.025, 0.52);
     group.add(guarded(keyboard));
     const keyRow = new THREE.MeshStandardMaterial({ color: 0x2E2A24, roughness: 0.55 });
     for (let r = 0; r < 3; r++) {
-      const row = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.025, 0.07), keyRow);
-      row.position.set(0, 0.825, 0.6 + r * 0.11);
-      group.add(row);
+      group.add(at(new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.025, 0.07), keyRow), 0, 0.055, 0.4 + r * 0.11));
     }
-    const space = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.025, 0.07), keyRow);
-    space.position.set(0, 0.825, 0.93);
-    group.add(space);
+    group.add(at(new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.025, 0.07), keyRow), 0, 0.055, 0.73));
 
     // --- gadget: a dot-matrix printer printing onto a real paper sheet ---
     const gadgetCanvas = document.createElement('canvas');
     gadgetCanvas.width = 256;
     gadgetCanvas.height = 320;
     const gadgetTexture = new THREE.CanvasTexture(gadgetCanvas);
-    const gadget = new THREE.Mesh(
-      new THREE.BoxGeometry(0.52, 0.3, 0.42),
-      beige
-    );
-    gadget.position.set(0.72, 0.94, 0.22);
-    group.add(guarded(gadget));
-    const slot = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.02, 0.04), carbon);
-    slot.position.set(0.72, 1.09, 0.22);
-    group.add(slot);
+    const gadget = guarded(at(new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.3, 0.42), beige), 0.72, 0.15, 0.1));
+    group.add(gadget);
+    group.add(at(new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.02, 0.04), carbon), 0.72, 0.3, 0.1));
     const paper = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.34), new THREE.MeshBasicMaterial({ map: gadgetTexture }));
-    paper.position.set(0.72, 1.26, 0.02);
+    paper.position.set(0.72, 0.47, -0.08);
     group.add(paper);
 
     // --- desk props: coffee mug, loose papers ---
     if (THREE.CylinderGeometry) {
-      const mug = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.045, 0.1, 12), new THREE.MeshStandardMaterial({ color: 0xB4552E, roughness: 0.6 }));
-      mug.position.set(-0.62, 0.84, 0.32);
-      group.add(guarded(mug));
+      const mug = guarded(at(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.045, 0.1, 12), new THREE.MeshStandardMaterial({ color: 0xB4552E, roughness: 0.6 })), -0.62, 0.05, 0.42));
+      group.add(mug);
     }
-    const sheet1 = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.3), paperMat);
-    sheet1.position.set(-0.55, 0.79, -0.05);
+    const paperMat = new THREE.MeshStandardMaterial({ color: 0xF2ECDC, roughness: 0.9 });
+    const sheet1 = at(new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.3), paperMat), -0.55, 0.005, -0.1);
     if (sheet1.rotation) sheet1.rotation.x = -Math.PI / 2;
     group.add(sheet1);
-    const sheet2 = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.3), paperMat);
-    sheet2.position.set(-0.48, 0.795, -0.02);
+    const sheet2 = at(new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.3), paperMat), -0.48, 0.012, -0.06);
     if (sheet2.rotation) { sheet2.rotation.x = -Math.PI / 2; sheet2.rotation.z = 0.3; }
     group.add(sheet2);
 

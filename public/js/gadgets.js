@@ -84,3 +84,16 @@ export function reset() {
   model.board.text = '';
   model.controller = {};
 }
+
+/** Fresh print job: clear the shared gadget state and tell everyone. */
+export function resetAndSync() {
+  reset();
+  send({
+    type: 'gadgetUpdate',
+    gadget: {
+      printer: { text: '' },
+      board: { text: '' },
+      controller: {},
+    },
+  });
+}

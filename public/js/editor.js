@@ -1,4 +1,5 @@
 import { MipsSim } from './mips.js';
+import { resetAndSync } from './gadgets.js';
 
 export class Editor {
   constructor({ container = document.body } = {}) {
@@ -55,6 +56,8 @@ export class Editor {
   }
 
   _run() {
+    // a new run is a fresh print job: clear the shared gadget state everywhere
+    resetAndSync();
     const sim = new MipsSim(this.ta.value);
     sim.onScreenOutput = (text) => { this.log.textContent += text; };
     sim.assemble();

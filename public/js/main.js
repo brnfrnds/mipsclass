@@ -1,21 +1,41 @@
-// 3D office: initialise the scene and one terminal per seat.
-// The join overlay (index.html) sits on top until the player sits (Task 10).
+// 3D office: a round conference table, one terminal place-setting per seat,
+// and a camera that glides to your seat when you sit down — every other
+// operator visible across the table. All placement is trigonometry off the
+// seat count: no guessed coordinates.
 (function () {
   const canvas = document.getElementById('canvas');
   if (!canvas) return;
 
-  const { scene, camera, renderer, board } = initScene(canvas);
+  const { scene, camera, renderer, board, table } = initScene(canvas);
+
+  // ---- seat layout: pure math ----
+  const SEATS = 4;               // seat count until rooms drive the scene
+  const TERMINAL_RADIUS = 1.1;   // terminal place-setting, fully on the tabletop (keyboard reaches 1.76 < 1.9)
+  const SEAT_RADIUS = 2.35;      // chair + humanoid, just outside the table
+  const CAMERA_RADIUS = 3.3;     // your eyes, just behind your avatar
+  const CAMERA_HEIGHT = 2.5;
+
+  const layout = [];
+  for (let i = 0; i < SEATS; i++) {
+    const theta = (i * 2 * Math.PI) / SEATS;
+    layout.push({
+      theta,
+      terminal: { x: Math.cos(theta) * TERMINAL_RADIUS, z: Math.sin(theta) * TERMINAL_RADIUS },
+      // screen faces the sitter (outward): local +z must point away from center
+      rot: Math.PI / 2 - theta,
+      cam: {
+        pos: { x: Math.cos(theta) * CAMERA_RADIUS, y: CAMERA_HEIGHT, z: Math.sin(theta) * CAMERA_RADIUS },
+        target: { x: 0, y: 0.95, z: 0 },
+      },
+    });
+  }
 
   const seats = [];
-  const layout = [
-    { x: -2.2, z: 1.7, rot: 0.3 },
-    { x: -0.75, z: 1.25, rot: 0.1 },
-    { x: 0.75, z: 1.25, rot: -0.1 },
-    { x: 2.2, z: 1.7, rot: -0.3 },
-  ];
-  layout.forEach((pos, i) => {
-    const seat = addSeat(scene, i, pos.x, pos.z);
-    if (seat.group.rotation) seat.group.rotation.y = pos.rot;
+  layout.forEach((spot, i) => {
+    const seat = addSeat(scene, i, spot.terminal.x, spot.terminal.z);
+    if (seat.group.rotation) seat.group.rotation.y = spot.rot;
+    // the place setting is built tabletop-relative — lift it onto the table
+    seat.group.position.y = table.top;
     seats.push(seat);
     updateScreen(seat, `TERMINAL ${i + 1}\nREADY_`);
   });
@@ -99,14 +119,6 @@
       });
     };
 
-    net.on('joined', (m) => {
-      joinEl.classList.add('hidden');
-      hudEl.classList.remove('hidden');
-      $('seatNum').textContent = String(m.player.seatIndex + 1);
-      $('hudName').textContent = m.player.name || 'Operator';
-      players.add(m.player); // own sprite too
-    });
-
     net.on('error', (m) => {
       msgEl.textContent = m.error === 'seatTaken'
         ? 'That seat was just taken — pick another.'
@@ -114,7 +126,7 @@
     });
   }
 
-  // App wiring (ES modules: net client, gadgets, MIPS editor, remote players).
+  // App wiring (ES modules: net client, gadgets, MIPS editor, office staff).
   Promise.all([
     import('./net.js'),
     import('./gadgets.js'),
@@ -123,9 +135,22 @@
   ]).then(([net, gadgets, { mountEditor }, players]) => {
     net.connect();
 
-    players.initPlayers({ scene, seats });
+    players.initPlayers({ scene, seats, tableTop: table.top });
 
-    // Remote player events (server is the source of truth).
+    function sitDown(player) {
+      // Your camera glides behind your own avatar — the whole table in view.
+      const spot = layout[player.seatIndex] || layout[0];
+      if (typeof setCameraAnchor === 'function') setCameraAnchor(spot.cam.pos, spot.cam.target);
+      document.getElementById('join').classList.add('hidden');
+      document.getElementById('hud').classList.remove('hidden');
+      document.getElementById('seatNum').textContent = String(player.seatIndex + 1);
+      document.getElementById('hudName').textContent = player.name || 'Operator';
+    }
+
+    net.on('joined', (m) => {
+      sitDown(m.player);
+      players.add(m.player, { isSelf: true });
+    });
     net.on('playerJoined', (m) => players.add(m.player));
     net.on('playerLeft', (m) => players.remove(m.seatIndex));
     net.on('playerTyping', (m) => players.setTyping(m.seatIndex, m.typing));

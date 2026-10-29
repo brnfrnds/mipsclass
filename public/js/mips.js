@@ -16,6 +16,12 @@ const STOP_REASON_NAME = {
 // per page — on the first MipsSim instance — and apply to every later one.
 let gadgetObserversRegistered = false;
 
+// IO handlers are ALSO shared per page: registering them on every instance
+// stacks them (print output doubles per run). Register once, routing to
+// whichever sim ran last.
+let activeSim = null;
+let handlersRegistered = false;
+
 export class MipsSim {
   constructor(source, entryFile = 'main.asm') {
     this.entryFile = entryFile;
@@ -25,23 +31,32 @@ export class MipsSim {
     this._screen = '';
     this._lastAssemble = null;
 
-    registerHandlers(this.mips, {
-      printString: (text) => {
-        this._screen += text;
-        if (this.onScreenOutput) this.onScreenOutput(text);
-      },
-      stdOut: (bytes) => {
-        const text = new TextDecoder().decode(new Uint8Array(bytes));
-        this._screen += text;
-        if (this.onScreenOutput) this.onScreenOutput(text);
-      },
-    });
+    activeSim = this;
+    if (!handlersRegistered) {
+      registerHandlers(this.mips, {
+        printString: (text) => {
+          if (!activeSim) return;
+          activeSim._screen += text;
+          if (activeSim.onScreenOutput) activeSim.onScreenOutput(text);
+        },
+        stdOut: (bytes) => {
+          if (!activeSim) return;
+          const text = new TextDecoder().decode(new Uint8Array(bytes));
+          activeSim._screen += text;
+          if (activeSim.onScreenOutput) activeSim.onScreenOutput(text);
+        },
+      });
+      handlersRegistered = true;
+    }
 
     if (!gadgetObserversRegistered) {
+      // NOTE: the sim word-rounds an observer's end, so a range ending
+      // exactly at the next gadget's base would swallow its first word
+      // (bytes double-fire). Keep a one-word margin below the neighbor.
       for (const base of [GADGET_IO.PRINTER_BASE, GADGET_IO.BOARD_BASE, GADGET_IO.CONTROLLER_BASE]) {
         this.mips.addMemoryWriteObserver(
           base,
-          base + GADGET_IO.GADGET_RANGE,
+          base + GADGET_IO.GADGET_RANGE - 16,
           (address, length, value) => gadgetWrite(address, value)
         );
       }

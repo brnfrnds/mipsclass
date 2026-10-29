@@ -10,8 +10,18 @@
     night: 0x171310,
     carpet: '#4a4136',
     plaster: 0xD6CCB4,
-    paper: 0xF2ECDC,
   };
+
+  // The round conference table. Terminal place-settings sit on it; the
+  // radii for terminals, sitters and cameras live in main.js and are
+  // derived from these by trigonometry, not guesswork.
+  const TABLE = {
+    radius: 1.9,
+    top: 1.06, // world y of the tabletop surface
+  };
+
+  let camTarget = { x: 0, y: 1.0, z: 0 };
+  let camGoal = null; // { pos: {x,y,z}, target: {x,y,z} }
 
   function makeCanvasTexture(w, h, painter, repeatX, repeatY) {
     const c = document.createElement('canvas');
@@ -95,11 +105,11 @@
 
     scene = new THREE.Scene();
     scene.background = new THREE.Color(PALETTE.night);
-    if (THREE.Fog) scene.fog = new THREE.Fog(PALETTE.night, 10, 24);
+    if (THREE.Fog) scene.fog = new THREE.Fog(PALETTE.night, 11, 26);
 
     camera = new THREE.PerspectiveCamera(55, width / height, 0.1, 100);
-    camera.position.set(0, 2.7, 6.4);
-    camera.lookAt(0, 1.05, 0);
+    camera.position.set(0, 3.4, 7.2);
+    camera.lookAt(0, 1.0, 0);
 
     renderer = new THREE.WebGLRenderer({ canvas: canvasEl, antialias: true });
     renderer.setSize(width, height);
@@ -160,20 +170,63 @@
     // the signature board on the wall
     const board = makeWallBoard(-3.2, 2.45, -5.97, 5.2, 1.8);
 
+    // the round conference table — everyone gathers around it
+    const tableWood = new THREE.MeshStandardMaterial({
+      map: makeCanvasTexture(256, 128, paintWood, 2, 2),
+      roughness: 0.6,
+    });
+    const pedestalMat = new THREE.MeshStandardMaterial({ color: 0x4A4038, roughness: 0.7, });
+    const top = new THREE.Mesh(new THREE.CylinderGeometry(TABLE.radius, TABLE.radius, 0.08, 44), tableWood);
+    top.position.y = TABLE.top - 0.04;
+    if ('castShadow' in top) { top.castShadow = true; top.receiveShadow = true; }
+    room.add(top);
+    const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, TABLE.top - 0.08, 20), pedestalMat);
+    pedestal.position.y = (TABLE.top - 0.08) / 2;
+    room.add(guarded(pedestal));
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.82, 0.06, 24), pedestalMat);
+    base.position.y = 0.03;
+    room.add(guarded(base));
+
     scene.add(room);
-    return { scene, camera, renderer, board };
+    return { scene, camera, renderer, board, table: TABLE };
+  }
+
+  function guarded(mesh) {
+    if ('castShadow' in mesh) mesh.castShadow = true;
+    return mesh;
+  }
+
+  /**
+   * Give the camera a seat: it glides to `pos` and keeps `target` in view.
+   * Used when an operator sits down so they see the whole table.
+   */
+  function setCameraAnchor(pos, target) {
+    camGoal = { pos, target };
   }
 
   function animate() {
     global.requestAnimationFrame(animate);
+    if (camGoal) {
+      const damp = 0.07;
+      if (camera.position.lerp && THREE.Vector3) {
+        camera.position.lerp(new THREE.Vector3(camGoal.pos.x, camGoal.pos.y, camGoal.pos.z), damp);
+      } else {
+        camera.position.set(camGoal.pos.x, camGoal.pos.y, camGoal.pos.z);
+      }
+      camTarget.x += (camGoal.target.x - camTarget.x) * damp;
+      camTarget.y += (camGoal.target.y - camTarget.y) * damp;
+      camTarget.z += (camGoal.target.z - camTarget.z) * damp;
+      camera.lookAt(camTarget.x, camTarget.y, camTarget.z);
+    }
     renderer.render(scene, camera);
   }
 
-  const mod = { initScene, animate };
+  const mod = { initScene, animate, setCameraAnchor };
   if (typeof module === 'object' && module.exports) {
     module.exports = mod;
   } else {
     global.initScene = initScene;
     global.animate = animate;
+    global.setCameraAnchor = setCameraAnchor;
   }
 })(typeof window !== 'undefined' ? window : global);
