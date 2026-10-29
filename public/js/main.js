@@ -13,7 +13,7 @@
   const TERMINAL_RADIUS = 1.1;   // terminal place-setting, fully on the tabletop (keyboard reaches 1.76 < 1.9)
   const SEAT_RADIUS = 2.35;      // chair + humanoid, just outside the table
   const CAMERA_RADIUS = 3.3;     // your eyes, just behind your avatar
-  const CAMERA_HEIGHT = 2.5;
+  const CAMERA_HEIGHT = 2.8;     // high enough that your own head never blocks the player across
 
   const layout = [];
   for (let i = 0; i < SEATS; i++) {
