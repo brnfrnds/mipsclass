@@ -36,14 +36,18 @@ function handleMessage(ws, rooms, parsed) {
       send(ws, { type: 'error', error: res.error });
       return;
     }
+    const isFirst = room.creatorId === null;
+    if (isFirst) room.creatorId = res.player.id; // the first joiner runs the machine
     wsRooms.set(ws, { room, seatIndex: res.player.seatIndex, playerId: res.player.id });
     // state must survive JSON: players come as an array (a Map would stringify to {})
     send(ws, {
       type: 'joined',
       player: res.player,
+      operator: isFirst,
       state: { ...room.getState(), players: Array.from(room.players.values()) },
     });
     broadcast(room, { type: 'playerJoined', player: res.player }, ws);
+    if (isFirst) sendOperatorQueue(room);
     return;
   }
 
@@ -84,6 +88,37 @@ function handleMessage(ws, rooms, parsed) {
       break;
     }
 
+    case 'submitJob': {
+      const lineCount = Math.max(0, parseInt(parsed.lineCount, 10) || 0);
+      const res = room.queue.submit(info.playerId, lineCount);
+      if (res.error) {
+        send(ws, { type: 'error', error: res.error });
+        return;
+      }
+      send(ws, { type: 'jobQueued', jobId: res.job.id, position: res.position, etaMs: res.job.endAt - Date.now() });
+      sendPositions(room);
+      sendOperatorQueue(room);
+      break;
+    }
+
+    case 'killJob':
+    case 'bumpJob': {
+      if (room.creatorId !== info.playerId) {
+        send(ws, { type: 'error', error: 'notOperator' });
+        return;
+      }
+      const jobId = parseInt(parsed.jobId, 10);
+      const job = type === 'killJob' ? room.queue.kill(jobId) : room.queue.bump(jobId);
+      if (!job) return;
+      if (type === 'killJob') {
+        const owner = wsFor(room, job.playerId);
+        if (owner) send(owner, { type: 'jobKilled', jobId: job.id });
+      }
+      sendPositions(room);
+      sendOperatorQueue(room);
+      break;
+    }
+
     case 'cableMessage': {
       const targetSeat = room.getCablePeer(info.seatIndex);
       if (targetSeat === null) {
@@ -107,7 +142,55 @@ function drop(ws) {
   if (!info) return;
   const room = info.room;
   room.leave(info.playerId);
+  const killed = room.queue.drop(info.playerId); // their job dies with them
+  if (killed) {
+    sendOperatorQueue(room);
+    sendPositions(room);
+  }
   broadcast(room, { type: 'playerLeft', seatIndex: info.seatIndex });
 }
 
-module.exports = { handleMessage, broadcast, send, drop };
+function wsFor(room, playerId) {
+  for (const [ws, info] of wsRooms) {
+    if (info.room === room && info.playerId === playerId) return ws;
+  }
+  return null;
+}
+
+/** Private queue-position update to each job's owner. */
+function sendPositions(room) {
+  for (const job of room.queue.jobs) {
+    const owner = wsFor(room, job.playerId);
+    if (owner) {
+      send(owner, { type: 'jobPosition', jobId: job.id, position: room.queue.position(job.id), etaMs: job.endAt - Date.now() });
+    }
+  }
+}
+
+/** The operator sees the whole queue. */
+function sendOperatorQueue(room) {
+  if (!room.creatorId) return;
+  const ws = wsFor(room, room.creatorId);
+  if (ws) send(ws, { type: 'operatorQueue', jobs: room.queue.snapshot() });
+}
+
+/** The mainframe clock: advance every room's queue. */
+function tickQueues(rooms) {
+  const now = Date.now();
+  for (const room of rooms.values()) {
+    const { started, done } = room.queue.tick(now);
+    if (!started.length && !done.length) continue;
+    for (const job of started) {
+      const owner = wsFor(room, job.playerId);
+      if (owner) send(owner, { type: 'jobRunning', jobId: job.id });
+    }
+    for (const job of done) {
+      const owner = wsFor(room, job.playerId);
+      if (owner) send(owner, { type: 'jobDone', jobId: job.id });
+    }
+    sendPositions(room);
+    sendOperatorQueue(room);
+  }
+}
+
+module.exports = { handleMessage, broadcast, send, drop, tickQueues };

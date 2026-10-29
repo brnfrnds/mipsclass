@@ -1,3 +1,5 @@
+const { JobQueue } = require('./queue');
+
 class Room {
   constructor(seatCount) {
     this.seatCount = seatCount;
@@ -10,6 +12,8 @@ class Room {
       controller: {},
     };
     this.cablePairs = []; // [{ seatA, seatB, sharedMemory: { base, size } }]
+    this.queue = new JobQueue(); // the simulated mainframe queue
+    this.creatorId = null; // the first joiner; the operator
   }
 
   join(seatIndex, player) {

@@ -4,7 +4,7 @@ const path = require('path');
 const url = require('url');
 const { WebSocketServer } = require('ws');
 const { Room } = require('./room');
-const { handleMessage, drop } = require('./ws');
+const { handleMessage, drop, tickQueues } = require('./ws');
 const { v4: uuidv4 } = require('uuid');
 
 const publicDir = path.join(__dirname, '..', 'public');
@@ -116,6 +116,10 @@ function createServer(opts = {}) {
     });
     ws.on('close', () => drop(ws));
   });
+
+  // the mainframe clock: advance every room's queue twice a second
+  const clock = setInterval(() => tickQueues(rooms), 250);
+  clock.unref?.();
 
   server.listen(port, () => {
     console.log(`mips-office-game server listening on :${port}`);
