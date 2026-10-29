@@ -187,8 +187,24 @@
     base.position.y = 0.03;
     room.add(guarded(base));
 
+    // keep the buffer sized to the window (and follow resizes)
+    wireResize(canvasEl);
+
     scene.add(room);
     return { scene, camera, renderer, board, table: TABLE };
+  }
+
+  /** Keep the render buffer and camera framed to the live window size. */
+  function wireResize(canvasEl) {
+    function onResize() {
+      const w = (canvasEl && canvasEl.clientWidth) || (global.innerWidth || 800);
+      const h = (canvasEl && canvasEl.clientHeight) || (global.innerHeight || 600);
+      camera.aspect = w / h;
+      if (camera.updateProjectionMatrix) camera.updateProjectionMatrix();
+      renderer.setSize(w, h, false); // buffer only — CSS already stretches the canvas
+    }
+    if (global.addEventListener) global.addEventListener('resize', onResize);
+    onResize(); // sync once at boot
   }
 
   function guarded(mesh) {

@@ -13,8 +13,8 @@ const canvasStub = {
 };
 global.THREE = {
   Scene: function () { this.children = []; this.background = null; this.add = (o) => this.children.push(o); },
-  PerspectiveCamera: function () { this.position = { set: noop }; this.lookAt = noop; },
-  WebGLRenderer: function () { this.setSize = noop; this.render = noop; this.domElement = canvasStub; },
+  PerspectiveCamera: function () { this.position = { set: noop }; this.lookAt = noop; this.aspect = 1; this.updateProjectionMatrix = noop; },
+  WebGLRenderer: function () { this.setSize = (w, h) => { this.lastSize = { w, h }; }; this.render = noop; this.domElement = canvasStub; },
   BoxGeometry: function () {}, PlaneGeometry: function () {},
   CylinderGeometry: function () {},
   MeshStandardMaterial: function () {}, MeshBasicMaterial: function () {},
@@ -34,10 +34,27 @@ global.document = { createElement: () => canvasStub };
 global.window = undefined;
 global.innerWidth = 800;
 global.innerHeight = 600;
+// capture resize listeners so tests can fire the event
+let resizeHandler = null;
+global.addEventListener = (type, fn) => { if (type === 'resize') resizeHandler = fn; };
 global.requestAnimationFrame = (f) => setTimeout(f, 0);
 
 const sceneMod = require('../../public/js/scene.js');
 const terminalMod = require('../../public/js/terminal.js');
+
+test('initScene registers a resize handler; firing it resizes camera and renderer', () => {
+  const canvas = { clientWidth: 800, clientHeight: 600, getContext: canvasStub.getContext };
+  const { camera, renderer } = sceneMod.initScene(canvas);
+  assert.equal(typeof resizeHandler, 'function', 'resize handler registered');
+
+  // the window (and so the canvas) grows
+  canvas.clientWidth = 1200;
+  canvas.clientHeight = 500;
+  resizeHandler();
+
+  assert.equal(camera.aspect, 1200 / 500, 'camera aspect follows the window');
+  assert.deepEqual(renderer.lastSize, { w: 1200, h: 500 }, 'render buffer follows the window');
+});
 
 test('initScene creates scene, camera, renderer and adds room geometry', () => {
   const { scene, camera, renderer } = sceneMod.initScene(canvasStub);
