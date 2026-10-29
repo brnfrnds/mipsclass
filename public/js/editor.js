@@ -83,6 +83,8 @@ export class Editor {
     if (!sim.assembleOk()) {
       this.log.textContent +=
         '\nASM ERRORS:\n' + sim.assembleErrors().map((e) => e.message).join('\n') + '\n';
+      // bad syntax crashes the computer just as hard as a bad address
+      netSend({ type: 'blowUp' });
       return;
     }
     sim.run().then(
