@@ -122,7 +122,11 @@ export class MipsSim {
   }
 
   addressOfLabel(name) {
-    return this.mips.getAddressOfLabel(name);
+    try {
+      return this.mips.getAddressOfLabel(name);
+    } catch {
+      return -1; // not assembled / unknown label
+    }
   }
 
   getScreenOutput() {

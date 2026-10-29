@@ -1,15 +1,20 @@
 import { MipsSim } from './mips.js';
 import { resetAndSync } from './gadgets.js';
-import { send as netSend } from './net.js';
+import * as net from './net.js';
 
 // ---------------------------------------------------------------------------
-// Command parsing: everything is uppercased (the teletype had no lowercase),
-// arguments are split but their text is preserved (only recased).
+// Command parsing: everything is uppercased (the teletype had no lowercase)
+// — EXCEPT register tokens: MARS register names ($v0, $t1…) are case-sensitive
+// lowercase, so $xx tokens keep their case through the machine.
 // ---------------------------------------------------------------------------
+export function upperLine(text) {
+  return String(text).toUpperCase().replace(/\$[A-Z0-9]+/g, (m) => m.toLowerCase());
+}
+
 export function parseCommand(line) {
   const trimmed = String(line).trim();
   if (!trimmed) return null;
-  const upper = trimmed.toUpperCase();
+  const upper = upperLine(trimmed);
   const sp = upper.indexOf(' ');
   if (sp === -1) return { cmd: upper, args: [] };
   return { cmd: upper.slice(0, sp), args: splitArgs(upper.slice(sp + 1)) };
@@ -32,18 +37,18 @@ export class Deck {
   count() { return this.lines.length; }
   line(n) { this._check(n); return this.lines[n - 1]; }
 
-  append(text) { this.lines.push(String(text).toUpperCase()); }
+  append(text) { this.lines.push(upperLine(text)); }
 
   insertBefore(n, text) {
     if (!Number.isInteger(n) || n < 1 || n > this.lines.length + 1) {
       throw new Error(`LINE ${n} OUT OF RANGE`);
     }
-    this.lines.splice(n - 1, 0, String(text).toUpperCase());
+    this.lines.splice(n - 1, 0, upperLine(text));
   }
 
   change(n, text) {
     this._check(n);
-    this.lines[n - 1] = String(text).toUpperCase();
+    this.lines[n - 1] = upperLine(text);
   }
 
   deleteRange(a, b) {
@@ -134,7 +139,8 @@ export function createTypingPulse(send, idleMs = 1200) {
 // The terminal: a command line and an output pane. This IS the machine.
 // ---------------------------------------------------------------------------
 export class Editor {
-  constructor({ container = document.body } = {}) {
+  constructor({ container = document.body, teletype = true } = {}) {
+    this.teletype = teletype; // false = print instantly (tests); true = 15 lines/s
     this.el = document.createElement('div');
     this.el.className = 'editor terminal';
 
@@ -175,11 +181,14 @@ export class Editor {
     this.el.appendChild(close);
 
     this.deck = new Deck();
-    ['  LI $V0, 4', '  LA $A0, HELLO', '  SYSCALL', '  LI $V0, 10', '  SYSCALL', 'HELLO: .ASCIIZ "HELLO WORLD"'].forEach((l) => this.deck.append(l));
+    ['.DATA', 'HELLO: .ASCIIZ "HELLO WORLD"', '.TEXT', '  LI $V0, 4', '  LA $A0, HELLO', '  SYSCALL', '  LI $V0, 10', '  SYSCALL'].forEach((l) => this.deck.append(l));
     this.inserting = null; // null, or the line number inserting before
-    this.outstanding = null; // the queued job (phase ②)
+    this.outstanding = null; // the queued job's id (phase ②)
+    this.awaitingJob = false; // submit sent, jobQueued not yet received
+    this.myJobId = null;
+    this.folds = { SOURCE: true, MACHINE: false, SYMBOLS: false }; // section open?
 
-    const pulse = createTypingPulse(netSend);
+    const pulse = createTypingPulse((m) => net.send(m));
     this.cmd.addEventListener('input', () => pulse());
     this.cmd.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter') return;
@@ -188,12 +197,73 @@ export class Editor {
       this._enter(raw);
     });
 
+    // the mainframe talks to this terminal directly
+    for (const t of ['jobQueued', 'jobPosition', 'jobRunning', 'jobDone', 'jobKilled']) {
+      net.on(t, (m) => this.onMessage(m));
+    }
+    net.on('operatorQueue', (m) => this.onOperatorQueue(m));
+    net.on('error', (m) => this.print(['ERROR: ' + String(m.error).toUpperCase()]));
+
     this._esc = (e) => { if (e.key === 'Escape') this.hide(); };
     document.addEventListener('keydown', this._esc);
 
     container.appendChild(this.el);
 
     this.print(['MIPSDOS LINE EDITOR — DECK LOADED: HELLO WORLD TEMPLATE', 'TYPE L TO LIST THE DECK. TYPE HELP FOR COMMANDS.']);
+  }
+
+  /** The mainframe's messages about my job. */
+  onMessage(m) {
+    if (m.type === 'jobQueued') {
+      this.awaitingJob = false;
+      if (this.outstanding === null) this.myJobId = m.jobId;
+      this.outstanding = m.jobId;
+      this._status();
+      return;
+    }
+    if (m.type === 'jobPosition') {
+      if (this.myJobId !== m.jobId) return;
+      this._status();
+      return;
+    }
+    if (m.type === 'jobRunning') {
+      if (this.myJobId && m.jobId !== this.myJobId) return;
+      this._status();
+      this._executeHeld();
+      return;
+    }
+    if (m.type === 'jobDone') {
+      this._clearJob();
+      return;
+    }
+    if (m.type === 'jobKilled') {
+      if (this.myJobId && m.jobId !== this.myJobId) return;
+      this.print(['JOB CANCELLED BY OPERATOR']);
+      this._clearJob();
+    }
+  }
+
+  setOperator() {
+    this.isOperator = true;
+    this.print(['YOU RUN THE MACHINE. KILL N / BUMP N CONTROL THE QUEUE.']);
+  }
+
+  onOperatorQueue(m) {
+    if (!this.isOperator || !m.jobs) return;
+    const lines = ['--- THE QUEUE (OPERATOR) ---'];
+    if (m.jobs.length === 0) lines.push('  (IDLE — NO JOBS)');
+    for (const j of m.jobs) {
+      lines.push('  #' + j.id + '  ' + j.state.toUpperCase() + '  ' + j.lineCount + ' LINES');
+    }
+    this.print(lines);
+  }
+
+  _clearJob() {
+    this.outstanding = null;
+    this.awaitingJob = false;
+    this.myJobId = null;
+    this.pendingDeck = null;
+    this._status();
   }
 
   _enter(raw) {
@@ -257,6 +327,14 @@ export class Editor {
         case 'T':
           this.print(this.deck.top());
           break;
+        case 'KILL':
+        case 'BUMP': {
+          const jobId = parseInt(args[0], 10);
+          if (!Number.isInteger(jobId)) throw new Error(cmd + ' REQUIRES A JOB NUMBER');
+          net.send({ type: cmd === 'KILL' ? 'killJob' : 'bumpJob', jobId });
+          this.print([cmd + ' JOB ' + jobId + ' — SENT TO THE MACHINE ROOM']);
+          break;
+        }
         case 'SUBMIT':
           this._submit();
           break;
@@ -276,8 +354,11 @@ export class Editor {
   }
 
   _status() {
-    if (this.outstanding) {
-      this.statusEl.textContent = this.outstanding;
+    if (this.outstanding !== null || this.awaitingJob) {
+      const ahead = Math.max(0, (this.position || 1) - 1);
+      this.statusEl.textContent = this.awaitingJob
+        ? 'JOB SUBMITTED — QUEUED, ASSIGNING'
+        : `JOB #${this.outstanding} — QUEUED, ${ahead} AHEAD`;
     } else if (this.inserting !== null) {
       this.statusEl.textContent = `.INSERT MODE — BEFORE LINE ${this.inserting}; '.' ENDS`;
     } else {
@@ -286,7 +367,7 @@ export class Editor {
   }
 
   _submit() {
-    if (this.outstanding) {
+    if (this.outstanding !== null || this.awaitingJob) {
       this.print(['ALREADY ONE JOB OUTSTANDING — WAIT FOR THE LISTING']);
       return;
     }
@@ -294,15 +375,25 @@ export class Editor {
       this.print(['THE DECK IS EMPTY']);
       return;
     }
-    // Phase ① transition: submit runs instantly. The queue takes over in ②.
+    // hold the deck; the queue calls the run when the slot arrives
+    this.pendingDeck = this.deck.all().slice();
+    this.awaitingJob = true;
+    this._status();
+    net.send({ type: 'submitJob', lineCount: this.deck.count() });
+  }
+
+  /** The queue gave this deck the machine — assemble and print the listing. */
+  _executeHeld() {
+    if (!this.pendingDeck) return;
+    const deckLines = this.pendingDeck;
+    this.pendingDeck = null;
     resetAndSync();
-    const deckLines = this.deck.all();
     const sim = new MipsSim(deckLines.join('\n'));
     sim.assemble();
     this._printListing(sim, deckLines);
   }
 
-  /** Print the assembler listing into the terminal pane. */
+  /** Print the assembler listing into the terminal pane, teletype-paced. */
   _printListing(sim, deckLines) {
     const listing = buildListing(sim, deckLines);
     const lines = [];
@@ -316,26 +407,58 @@ export class Editor {
     this.print(lines);
 
     if (listing.hasErrors) {
-      netSend({ type: 'blowUp' });
+      net.send({ type: 'blowUp' });
       return;
     }
     sim.run().then(
       (res) => this.print(['[STOPPED: ' + res.reason + ']']),
       (err) => {
         this.print(['RUN ERROR: ' + (err && err.message ? err.message : String(err))]);
-        if (err && err.name === 'RuntimeError') netSend({ type: 'blowUp' });
+        if (err && err.name === 'RuntimeError') net.send({ type: 'blowUp' });
       }
     );
   }
 
+  /**
+   * Teletype print: at ~15 lines/s when teletype is on, instantly in tests.
+   * Foldable section headers are printed as .fold-head divs; their lines
+   * carry .foldable and the section class, hidden while the section is folded.
+   */
   print(lines) {
-    for (const line of lines) {
-      const div = document.createElement('div');
-      div.className = 'terminal-line';
-      div.textContent = line;
-      this.out.appendChild(div);
-    }
-    this.out.scrollTop = this.out.scrollHeight;
+    let section = this._lastSection; // carry across prints (the listing continues)
+    lines.forEach((line, i) => {
+      if (line.startsWith('=== ')) section = line.replace(/===|\(/g, '').trim().split(' ')[0];
+      const sec = section; // capture per line — the closure must not see the loop's end state
+      const emit = () => {
+        const isFoldHead = line.startsWith('=== ');
+        const div = document.createElement('div');
+        if (isFoldHead) {
+          div.className = 'terminal-line fold-head';
+          div.dataset.section = sec;
+          div.textContent = (this.folds[sec] ? '[−] ' : '[+] ') + line;
+          div.onclick = () => this._toggleFold(sec);
+        } else {
+          div.className = 'terminal-line foldable section-' + sec + (this.folds[sec] ? '' : ' folded');
+          div.textContent = line;
+        }
+        this.out.appendChild(div);
+        this.out.scrollTop = this.out.scrollHeight;
+      };
+      if (this.teletype) setTimeout(emit, i * 66);
+      else emit();
+    });
+    this._lastSection = section;
+  }
+
+  _toggleFold(section) {
+    this.folds[section] = !this.folds[section];
+    const heads = this.out.querySelectorAll('.fold-head[data-section="' + section + '"]');
+    heads.forEach((h) => {
+      h.textContent = (this.folds[section] ? '[−] ' : '[+] ') + '=== ' + section + ' ===';
+    });
+    this.out.querySelectorAll('.foldable.section-' + section).forEach((el) => {
+      el.classList.toggle('folded', !this.folds[section]);
+    });
   }
 
   setStatus(text) {

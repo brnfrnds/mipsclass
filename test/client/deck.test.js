@@ -11,7 +11,7 @@ test('parseCommand uppercases, trims, and splits a command', async () => {
 
 test('parseCommand keeps argument text intact apart from casing', async () => {
   const { parseCommand } = await import('../../public/js/editor.js');
-  assert.deepEqual(parseCommand('c 2 add $t0, $t1, $t2  '), { cmd: 'C', args: ['2', 'ADD $T0, $T1, $T2'] });
+  assert.deepEqual(parseCommand('c 2 add $t0, $t1, $t2  '), { cmd: 'C', args: ['2', 'ADD $t0, $t1, $t2'] });
 });
 
 test('Deck starts empty and appends with A', async () => {
