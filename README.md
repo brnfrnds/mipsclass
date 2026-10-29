@@ -17,6 +17,24 @@ npm start
 
 Then open **http://localhost:3000**. The server listens on port 3000 and serves the game from `public/`.
 
+## Managing the server
+
+| Task | Command |
+|---|---|
+| Start (foreground) | `npm start` — logs print here; **Ctrl+C** stops it |
+| Start (background) | `Start-Process -NoNewWindow node -ArgumentList "server/index.js"` |
+| Stop | `npm run stop` — kills whatever is listening on :3000, nothing else |
+| Check if running | `Get-NetTCPConnection -LocalPort 3000 -State Listen` |
+| Restart | `npm run stop` then `npm start` |
+
+Notes:
+
+- The server holds **all state in memory** — rooms, seats, gadget text. Restarting wipes every room and disconnects every player (their tabs drop back to the join screen).
+- `npm run stop` is surgical: it stops the process bound to port 3000 only, so other node processes (editors, tooling) are untouched.
+- To change the port, start it programmatically: `node -e "require('./server/index.js').createServer({ port: 8080 })"` — or edit the default in `server/index.js`.
+- Server logs (connections, WS messages) print to the console that started it; a background start logs to that console until it closes.
+
+
 ## Playing
 
 The first screen is the join panel.

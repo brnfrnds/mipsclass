@@ -5,6 +5,7 @@
   "description": "80s office MIPS programming game",
   "scripts": {
     "start": "node server/index.js",
+    "stop": "powershell -ExecutionPolicy Bypass -File server/stop.ps1",
     "test": "node --test"
   },
   "dependencies": {
