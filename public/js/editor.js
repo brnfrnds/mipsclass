@@ -1,5 +1,20 @@
 import { MipsSim } from './mips.js';
 import { resetAndSync } from './gadgets.js';
+import { send as netSend } from './net.js';
+
+/**
+ * Keystrokes → typing signal: true on every press, false once the
+ * operator goes quiet for `idleMs`. Other operators' offices animate
+ * this as keyboard-banging.
+ */
+export function createTypingPulse(send, idleMs = 1200) {
+  let timer = null;
+  return function press() {
+    send({ type: 'typing', typing: true });
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => send({ type: 'typing', typing: false }), idleMs);
+  };
+}
 
 export class Editor {
   constructor({ container = document.body } = {}) {
@@ -52,6 +67,10 @@ export class Editor {
     this._esc = (e) => { if (e.key === 'Escape') this.hide(); };
     document.addEventListener('keydown', this._esc);
 
+    // typing broadcast: every keystroke pulses, silence stops it
+    const pulse = createTypingPulse(netSend);
+    this.ta.addEventListener('input', () => pulse());
+
     container.appendChild(this.el);
   }
 
@@ -68,7 +87,11 @@ export class Editor {
     }
     sim.run().then(
       (res) => { this.log.textContent += `\n[stopped: ${res.reason}]\n`; },
-      (err) => { this.log.textContent += '\nRUN ERROR: ' + (err && err.message ? err.message : String(err)) + '\n'; }
+      (err) => {
+        this.log.textContent += '\nRUN ERROR: ' + (err && err.message ? err.message : String(err)) + '\n';
+        // a runtime crash blows up the operator's computer, office-wide
+        if (err && err.name === 'RuntimeError') netSend({ type: 'blowUp' });
+      }
     );
   }
 

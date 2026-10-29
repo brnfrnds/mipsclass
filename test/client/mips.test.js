@@ -28,6 +28,14 @@ test('MipsSim reads back a register value set by the program', async () => {
   assert.equal(sim.readRegister('$t0'), 42);
 });
 
+test('MipsSim rejects with a typed RuntimeError on a crash (bad address)', async () => {
+  const { MipsSim } = await import('../../public/js/mips.js');
+  const sim = new MipsSim('li $t0, 0x8000\nsb $t1, 0($t0)');
+  sim.assemble();
+  assert.ok(sim.assembleOk(), 'assembles fine — the crash is at runtime');
+  await assert.rejects(() => sim.run(), (err) => err.name === 'RuntimeError');
+});
+
 test('MipsSim print syscalls feed onScreenOutput and getScreenOutput', async () => {
   const { MipsSim } = await import('../../public/js/mips.js');
   const source =
