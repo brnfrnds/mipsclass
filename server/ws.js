@@ -37,7 +37,12 @@ function handleMessage(ws, rooms, parsed) {
       return;
     }
     wsRooms.set(ws, { room, seatIndex: res.player.seatIndex, playerId: res.player.id });
-    send(ws, { type: 'joined', player: res.player, state: room.getState() });
+    // state must survive JSON: players come as an array (a Map would stringify to {})
+    send(ws, {
+      type: 'joined',
+      player: res.player,
+      state: { ...room.getState(), players: Array.from(room.players.values()) },
+    });
     broadcast(room, { type: 'playerJoined', player: res.player }, ws);
     return;
   }

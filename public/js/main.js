@@ -150,6 +150,15 @@
     net.on('joined', (m) => {
       sitDown(m.player);
       players.add(m.player, { isSelf: true });
+      // everyone who joined before you takes their seat around the table
+      (m.state.players || []).forEach((p) => {
+        if (p.id !== m.player.id) players.add(p);
+      });
+      // and the office hardware is in the state the room left it
+      if (m.state.gadgetState) {
+        gadgets.applyState(m.state.gadgetState);
+        refreshGadgetVisuals(gadgets.getModel());
+      }
     });
     net.on('playerJoined', (m) => players.add(m.player));
     net.on('playerLeft', (m) => players.remove(m.seatIndex));

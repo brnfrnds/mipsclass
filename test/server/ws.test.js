@@ -92,6 +92,20 @@ test('gadgetUpdate updates room gadgetState and broadcasts to all in room', () =
   assert.equal(b.sent[0].gadgetState.printer.text, 'HELLO');
 });
 
+test('joinRoom delivers the joiner the full room state with a serializable player list', () => {
+  const rooms = makeRooms();
+  const a = fakeWs();
+  const b = fakeWs();
+  join(a, rooms, 'r1', 0, 'Ada');
+  // join b WITHOUT the helper (it clears sent) so the echo survives to inspect
+  handleMessage(b, rooms, { type: 'joinRoom', roomId: 'r1', seatIndex: 1, name: 'Bob' });
+  const joinedMsg = b.sent.find((m) => m.type === 'joined');
+  assert.ok(joinedMsg, 'joined echo received');
+  assert.ok(Array.isArray(joinedMsg.state.players), 'players is a JSON array');
+  assert.equal(joinedMsg.state.players.length, 2, 'everyone in the room is listed (the joiner included)');
+  assert.equal(joinedMsg.state.players[0].name, 'Ada', 'the earlier player is listed');
+});
+
 test('joinRoom broadcasts playerJoined to the other members of the room', () => {
   const rooms = makeRooms();
   const a = fakeWs();
