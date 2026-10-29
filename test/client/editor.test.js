@@ -30,16 +30,17 @@ function makeEl(tag) {
       toggle(c, force) { const on = force === undefined ? !set.has(c) : !!force; if (on) set.add(c); else set.delete(c); return on; },
     },
     querySelectorAll(sel) {
+      // generic class matcher: '.a.b' matches elements with both classes;
+      // '.fold-head[data-section="X"]' also requires dataset.section === X
+      const parts = sel.split('.').filter(Boolean).map((p) => {
+        const m = p.match(/^([^\[]+)\[data-section="([^"]+)"\]$/);
+        return m ? { cls: m[1], section: m[2] } : { cls: p };
+      });
       const out = [];
       const walk = (n) => {
         for (const c of n.children || []) {
-          if (sel.startsWith('.fold-head') && c.classList.contains('fold-head')) {
-            const want = sel.match(/data-section="([^"]+)"/);
-            if (!want || c.dataset.section === want[1]) out.push(c);
-          } else if (sel.startsWith('.foldable')) {
-            if (!c.classList.contains('foldable')) { walk(c); continue; }
-            const sec = sel.match(/section-([\w-]+)/);
-            if (!sec || c.classList.contains('section-' + sec[1])) out.push(c);
+          if (parts.every((p) => c.classList.contains(p.cls) && (p.section === undefined || c.dataset.section === p.section))) {
+            out.push(c);
           }
           walk(c);
         }
@@ -156,6 +157,23 @@ test('a killed job prints JOB CANCELLED and frees the editor', async () => {
   assert.equal(ed.statusEl.textContent, 'READY', 'editor freed');
   ed._enter('SUBMIT'); // can submit again
   assert.equal(fake.sent.filter((m) => m.type === 'submitJob').length, 2);
+});
+
+test('plain terminal traffic is always visible (the boot banner and L output)', async () => {
+  const net = await import('../../public/js/net.js');
+  net.setSocket(fake);
+  const { Editor } = await import('../../public/js/editor.js');
+  const ed = new Editor({ container: makeEl('div'), teletype: false });
+  // the boot banner must be visible (not swallowed by the fold system)
+  assert.ok(ed.out.textContent.includes('MIPSDOS LINE EDITOR'), 'boot banner visible');
+  assert.ok(ed.out.textContent.includes('DECK LOADED'), 'banner second line visible');
+  // L output: numbered lines, visible, NOT foldable-hidden
+  ed._enter('L');
+  const lines = [...ed.out.querySelectorAll('.terminal-line')].filter((d) => d.textContent.trim().startsWith('1'));
+  assert.ok(lines.length > 0, 'the L listing printed');
+  assert.ok(lines.every((d) => !d.classList.contains('folded')), 'plain output is never folded');
+  // and it is not marked foldable at all
+  assert.ok(lines.every((d) => !d.classList.contains('foldable')), 'plain output is not foldable');
 });
 
 test('createTypingPulse sends typing true on press and false after idle', async () => {

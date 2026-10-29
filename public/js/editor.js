@@ -415,7 +415,7 @@ export class Editor {
     lines.push('=== SYMBOLS (' + listing.symbols.length + ') ===');
     for (const s of listing.symbols) lines.push('  ' + s.name.padEnd(12) + s.addr);
     lines.push(listing.hasErrors ? '== ASSEMBLY HALTED ==' : '== ASSEMBLY CLEAN ==');
-    this.print(lines);
+    this.printListing(lines);
 
     if (listing.hasErrors) {
       net.send({ type: 'blowUp' });
@@ -435,11 +435,26 @@ export class Editor {
    * Foldable section headers are printed as .fold-head divs; their lines
    * carry .foldable and the section class, hidden while the section is folded.
    */
+  /** Plain terminal traffic: echoes, listings on demand, banners. Always visible. */
   print(lines) {
-    let section = this._lastSection; // carry across prints (the listing continues)
+    for (const line of lines) {
+      const div = document.createElement('div');
+      div.className = 'terminal-line';
+      div.textContent = line;
+      this.out.appendChild(div);
+    }
+    this.out.scrollTop = this.out.scrollHeight;
+  }
+
+  /**
+   * The assembler listing: foldable by section, printed teletype-style.
+   * Section headers are [+/−] toggles; SOURCE prints open, others folded.
+   */
+  printListing(lines) {
+    let section = null;
     lines.forEach((line, i) => {
       if (line.startsWith('=== ')) section = line.replace(/===|\(/g, '').trim().split(' ')[0];
-      const sec = section; // capture per line — the closure must not see the loop's end state
+      const sec = section; // per-line capture — the closure must not see the loop's end state
       const emit = () => {
         const isFoldHead = line.startsWith('=== ');
         if (this.teletype) sound.teletypeTick();
@@ -459,7 +474,6 @@ export class Editor {
       if (this.teletype) setTimeout(emit, i * 66);
       else emit();
     });
-    this._lastSection = section;
   }
 
   _toggleFold(section) {
