@@ -1,6 +1,7 @@
 import { MipsSim } from './mips.js';
 import { resetAndSync } from './gadgets.js';
 import * as net from './net.js';
+import * as sound from './sound.js';
 
 // ---------------------------------------------------------------------------
 // Command parsing: everything is uppercased (the teletype had no lowercase)
@@ -167,12 +168,19 @@ export class Editor {
     this.statusEl.textContent = 'READY';
     this.el.appendChild(this.statusEl);
 
-    // the command line
+    // the command line: a visible "> " prompt so the input is perceptible
+    const row = document.createElement('div');
+    row.className = 'terminal-cmd-row';
+    const prompt = document.createElement('span');
+    prompt.className = 'terminal-prompt';
+    prompt.textContent = '>';
+    row.appendChild(prompt);
     this.cmd = document.createElement('input');
     this.cmd.className = 'terminal-cmd';
     this.cmd.spellcheck = false;
     this.cmd.autocomplete = 'off';
-    this.el.appendChild(this.cmd);
+    row.appendChild(this.cmd);
+    this.el.appendChild(row);
 
     const close = document.createElement('button');
     close.className = 'editor-close';
@@ -189,7 +197,7 @@ export class Editor {
     this.folds = { SOURCE: true, MACHINE: false, SYMBOLS: false }; // section open?
 
     const pulse = createTypingPulse((m) => net.send(m));
-    this.cmd.addEventListener('input', () => pulse());
+    this.cmd.addEventListener('input', () => { pulse(); sound.clack(); });
     this.cmd.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter') return;
       const raw = this.cmd.value;
@@ -229,16 +237,19 @@ export class Editor {
     if (m.type === 'jobRunning') {
       if (this.myJobId && m.jobId !== this.myJobId) return;
       this._status();
+      sound.humOn();
       this._executeHeld();
       return;
     }
     if (m.type === 'jobDone') {
+      sound.humOff();
       this._clearJob();
       return;
     }
     if (m.type === 'jobKilled') {
       if (this.myJobId && m.jobId !== this.myJobId) return;
       this.print(['JOB CANCELLED BY OPERATOR']);
+      sound.humOff();
       this._clearJob();
     }
   }
@@ -431,6 +442,7 @@ export class Editor {
       const sec = section; // capture per line — the closure must not see the loop's end state
       const emit = () => {
         const isFoldHead = line.startsWith('=== ');
+        if (this.teletype) sound.teletypeTick();
         const div = document.createElement('div');
         if (isFoldHead) {
           div.className = 'terminal-line fold-head';

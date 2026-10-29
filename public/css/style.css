@@ -277,6 +277,65 @@ html, body {
   border-top-width: 10px;
   box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.6), 0 0 60px rgba(53, 255, 110, 0.08);
   font-family: 'VT323', 'Courier New', monospace;
+  color: var(--phosphor);
+}
+.terminal-out {
+  flex: 1;
+  overflow: auto;
+  background: #05130A;
+  border: 1px solid rgba(53, 255, 110, 0.25);
+  padding: 10px 12px;
+  font-size: 18px;
+  line-height: 1.3;
+  color: var(--phosphor);
+}
+.terminal-line {
+  white-space: pre-wrap;
+  word-break: break-word;
+  text-shadow: 0 0 6px rgba(53, 255, 110, 0.45);
+}
+.terminal-line.fold-head {
+  color: #7DFFA8;
+  background: rgba(53, 255, 110, 0.08);
+  padding: 2px 6px;
+  margin: 6px -6px 2px;
+  cursor: pointer;
+  user-select: none;
+}
+.terminal-line.foldable.folded {
+  display: none;
+}
+.terminal-status {
+  color: #7DFFA8;
+  font-size: 17px;
+  letter-spacing: 1px;
+  padding: 8px 2px 4px;
+}
+.terminal-cmd-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #05130A;
+  border: 1px solid rgba(53, 255, 110, 0.35);
+  padding: 6px 12px;
+  margin-top: 8px;
+}
+.terminal-prompt {
+  color: var(--phosphor);
+  font-size: 22px;
+  text-shadow: 0 0 8px rgba(53, 255, 110, 0.5);
+  user-select: none;
+}
+.terminal-cmd {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--phosphor);
+  caret-color: var(--phosphor);
+  font-family: inherit;
+  font-size: 20px;
+  text-shadow: 0 0 6px rgba(53, 255, 110, 0.45);
 }
 .editor::after {
   content: "";
@@ -442,6 +501,84 @@ html, body {
   color: var(--ink);
   background:
     repeating-linear-gradient(to bottom, transparent, transparent 21px, rgba(122, 79, 38, 0.18) 21px, rgba(122, 79, 38, 0.18) 22px);
+}
+
+/* ---------- the reference card: the green card, always on top ---------- */
+.ref-card {
+  position: fixed;
+  top: 70px;
+  right: 16px;
+  z-index: 110; /* above the printer card and the editor */
+  width: 460px;
+  max-width: calc(100vw - 32px);
+  max-height: 72vh;
+  display: flex;
+  flex-direction: column;
+  background: #E9EFD8; /* the green card's pale phosphor stock */
+  border: 1px solid #8FA37E;
+  box-shadow: 8px 10px 0 rgba(0, 0, 0, 0.5);
+  color: #1E2B1A;
+  font-family: 'Courier Prime', monospace;
+}
+.ref-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: #2E4A2A;
+  color: #CFE6C0;
+  cursor: move;
+  user-select: none;
+}
+.ref-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+.ref-close {
+  background: transparent;
+  border: 1px solid #CFE6C0;
+  color: #CFE6C0;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 1px 8px;
+}
+.ref-filter {
+  margin: 8px 12px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid #8FA37E;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+}
+.ref-body {
+  overflow: auto;
+  padding: 4px 12px 14px;
+  flex: 1;
+}
+.ref-fold-head {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  margin: 12px 0 6px;
+  padding: 4px 6px;
+  background: rgba(46, 74, 42, 0.12);
+  cursor: pointer;
+  user-select: none;
+}
+.ref-section {
+  padding-left: 10px;
+}
+.ref-section.ref-folded {
+  display: none;
+}
+.ref-row {
+  font-size: 12.5px;
+  line-height: 1.6;
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 #hud .hud-editor-btn:hover {
   background: var(--paper-dim);
