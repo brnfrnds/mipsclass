@@ -4,19 +4,20 @@
   const canvas = document.getElementById('canvas');
   if (!canvas) return;
 
-  const { scene, camera, renderer } = initScene(canvas);
+  const { scene, camera, renderer, board } = initScene(canvas);
 
   const seats = [];
   const layout = [
-    { x: -1.6, z: 1.15 },
-    { x: -0.55, z: 1.15 },
-    { x: 0.55, z: 1.15 },
-    { x: 1.6, z: 1.15 },
+    { x: -2.2, z: 1.7, rot: 0.3 },
+    { x: -0.75, z: 1.25, rot: 0.1 },
+    { x: 0.75, z: 1.25, rot: -0.1 },
+    { x: 2.2, z: 1.7, rot: -0.3 },
   ];
   layout.forEach((pos, i) => {
     const seat = addSeat(scene, i, pos.x, pos.z);
+    if (seat.group.rotation) seat.group.rotation.y = pos.rot;
     seats.push(seat);
-    updateScreen(seat, `SEAT ${i + 1}\nREADY`);
+    updateScreen(seat, `TERMINAL ${i + 1}\nREADY_`);
   });
 
   animate();
@@ -25,12 +26,12 @@
   window.__officeScene = scene;
   window.__officeCamera = camera;
 
-  /** Paint the shared gadget state summary on every seat's gadget sprite. */
+  /** Printer text prints on every seat's paper; board text hits the wall board. */
   function refreshGadgetVisuals(model) {
-    if (typeof updateGadget !== 'function') return;
-    const last = (t) => { const p = String(t == null ? '' : t).split('\n'); return p[p.length - 1]; };
-    const summary = `PRT: ${last(model.printer.text)}\nBRD: ${last(model.board.text)}`;
-    seats.forEach((s) => updateGadget(s, summary));
+    const printerText = model.printer.text || '';
+    const boardText = model.board.text || '';
+    seats.forEach((s) => updateGadget(s, printerText));
+    if (board && board.paint) board.paint(boardText);
   }
 
   // ---- Join screen flow ----
@@ -102,6 +103,7 @@
       joinEl.classList.add('hidden');
       hudEl.classList.remove('hidden');
       $('seatNum').textContent = String(m.player.seatIndex + 1);
+      $('hudName').textContent = m.player.name || 'Operator';
       players.add(m.player); // own sprite too
     });
 
@@ -145,11 +147,8 @@
     editor.hide();
     net.on('joined', () => editor.show());
     const hudBtn = document.createElement('button');
+    hudBtn.className = 'hud-editor-btn';
     hudBtn.textContent = 'Editor';
-    hudBtn.style.cssText =
-      'position:absolute; top:16px; right:16px; z-index:30; padding:8px 14px; ' +
-      'background:#1f2833; border:1px solid #66fcf1; color:#66fcf1; ' +
-      'font-family:inherit; cursor:pointer;';
     hudBtn.onclick = () => editor.show();
     document.getElementById('hud').appendChild(hudBtn);
   }).catch((err) => console.error('app wiring failed:', err));

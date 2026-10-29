@@ -50,16 +50,16 @@ function makeSprite(player) {
   c.width = 256;
   c.height = 128;
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, 256, 128);
+  ctx.fillStyle = 'rgba(16, 14, 10, 0.78)';
+  ctx.fillRect(24, 8, 208, 112);
   ctx.fillStyle = '#66fcf1';
   ctx.font = 'bold 28px monospace';
   ctx.textAlign = 'center';
   ctx.fillText(String(player.name || '???').slice(0, 12), 128, 44);
 
   const texture = new THREE.CanvasTexture(c);
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture }));
-  sprite.scale.set(1.4, 0.7, 1);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true }));
+  sprite.scale.set(1.2, 0.6, 1);
 
   const url = player.profilePictureUrl;
   if (url && typeof Image !== 'undefined') {
@@ -86,7 +86,7 @@ export function add(player) {
   const seat = seatAt(player.seatIndex);
   if (!seat) return;
   const sprite = makeSprite(player);
-  sprite.position.set(seat.x, 1.9, seat.z);
+  sprite.position.set(seat.x, 1.78, seat.z);
   scene.add(sprite);
   states.set(player.seatIndex, {
     typing: false,

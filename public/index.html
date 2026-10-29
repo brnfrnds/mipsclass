@@ -3,46 +3,62 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MIPS Office — 80s Terminal</title>
+  <title>MIPS Office — Terminal Assignment</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&family=Courier+Prime:wght@400;700&display=swap">
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
   <canvas id="canvas"></canvas>
 
-  <!-- Join / lobby overlay (shown until the player sits at a seat) -->
+  <!-- Join / lobby overlay: an interoffice memo -->
   <div id="join" class="overlay">
-    <div class="panel">
-      <h1>MIPS OFFICE</h1>
-      <div class="section">
-        <label>Room ID</label>
-        <input type="text" id="roomId" placeholder="join existing room">
-      </div>
-      <div class="section">
-        <label>Or create (admin, seat count)</label>
+    <div class="memo">
+      <div class="memo-stamp">MIPS DIVISION</div>
+      <h1 class="memo-head">Interoffice Memo</h1>
+      <p class="memo-sub">Re: terminal assignment — all operators must be seated before shift start.</p>
+
+      <label class="field">
+        <span class="field-label">Room no.</span>
+        <input type="text" id="roomId" placeholder="000-000">
+      </label>
+
+      <label class="field">
+        <span class="field-label">Open a room <em>(supervisors only — seats)</em></span>
         <input type="number" id="seatCount" placeholder="4" min="1" max="16">
-      </div>
-      <div class="section">
-        <label>Your name</label>
-        <input type="text" id="playerName" placeholder="Operator">
-      </div>
-      <div class="section">
-        <label>Profile picture URL</label>
-        <input type="text" id="profilePic" placeholder="https://example.com/avatar.png">
-      </div>
+      </label>
+
+      <label class="field">
+        <span class="field-label">Operator name <b class="req">*</b></span>
+        <input type="text" id="playerName" placeholder="YOUR NAME HERE">
+      </label>
+
+      <label class="field">
+        <span class="field-label">Photo-stat URL <em>(for the wall roster)</em></span>
+        <input type="text" id="profilePic" placeholder="https://…">
+      </label>
+
       <div class="seats" id="seats"></div>
+
       <div class="actions">
-        <button id="btnCreate">Create Room</button>
-        <button id="btnJoin">Join Room</button>
-        <button id="btnSit" disabled>Sit at Seat</button>
+        <button id="btnCreate">Open a room</button>
+        <button id="btnJoin">Find my room</button>
+        <button id="btnSit" disabled>Sit down</button>
       </div>
       <div id="msg" class="msg"></div>
     </div>
   </div>
 
-  <!-- In-game HUD (hidden until seated) -->
+  <!-- In-game HUD: an operator badge -->
   <div id="hud" class="overlay hidden">
-    <div id="seatLabel" class="seat-label">Seat <span id="seatNum">-</span></div>
-    <div id="status" class="status">Active</div>
+    <div class="badge">
+      <span class="badge-hole"></span>
+      <span class="badge-label">Operator</span>
+      <span class="badge-name" id="hudName">—</span>
+      <span class="badge-seat">Seat <b id="seatNum">—</b></span>
+      <span class="badge-status" id="status">On shift</span>
+    </div>
   </div>
 
   <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>

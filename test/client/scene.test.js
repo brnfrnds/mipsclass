@@ -16,11 +16,19 @@ global.THREE = {
   PerspectiveCamera: function () { this.position = { set: noop }; this.lookAt = noop; },
   WebGLRenderer: function () { this.setSize = noop; this.render = noop; this.domElement = canvasStub; },
   BoxGeometry: function () {}, PlaneGeometry: function () {},
+  CylinderGeometry: function () {},
   MeshStandardMaterial: function () {}, MeshBasicMaterial: function () {},
+  SpriteMaterial: function () {},
+  Sprite: function (m) { this.material = m; this.position = { set: noop }; },
   Mesh: function (g, m) { this.geometry = g; this.material = m; this.position = { set: noop }; },
   Color: function () {},
-  CanvasTexture: function (c) { this.image = c; this.needsUpdate = false; },
+  CanvasTexture: function (c) { this.image = c; this.needsUpdate = false; this.repeat = { set: noop }; },
   Group: function () { this.children = []; this.position = { set: noop }; this.add = (o) => this.children.push(o); },
+  Fog: function () {},
+  HemisphereLight: function () { this.position = { set: noop }; },
+  DirectionalLight: function () { this.position = { set: noop }; this.castShadow = false; this.shadow = { mapSize: { set: noop } }; },
+  RepeatWrapping: 1000,
+  ACESFilmicToneMapping: 4,
 };
 global.document = { createElement: () => canvasStub };
 global.window = undefined;
@@ -37,6 +45,15 @@ test('initScene creates scene, camera, renderer and adds room geometry', () => {
   assert.ok(camera, 'camera');
   assert.ok(renderer, 'renderer');
   assert.ok(scene.children.length >= 1, 'room geometry added to scene');
+});
+
+test('initScene returns the wall board, which paints shared board text', () => {
+  const { board } = sceneMod.initScene(canvasStub);
+  assert.ok(board, 'board object');
+  assert.equal(typeof board.paint, 'function', 'board.paint');
+  board.texture.needsUpdate = false;
+  board.paint('MEETING AT NOON');
+  assert.equal(board.texture.needsUpdate, true, 'board texture flagged for redraw');
 });
 
 test('addSeat returns a seat with screen mesh positioned at x,z and added to scene', () => {
