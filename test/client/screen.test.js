@@ -79,6 +79,18 @@ test('the editor cycles display modes with MODE and keeps the content', async ()
   assert.ok(ed.statusEl.textContent.includes('VT-80'), 'the status shows the mode tag');
 });
 
+test('fitFontSize scales the cell so the glass fits the window vertically', async () => {
+  const { fitFontSize } = await import('../../public/js/editor.js');
+  // plenty of room: capped at the max cell size
+  assert.equal(fitFontSize(24, 800), 16);
+  // a short window: the cell shrinks (available / rows / 1.15 line-height)
+  assert.equal(fitFontSize(24, 345), 12); // 345/24 = 14.375 → /1.15 = 12.5 → 12
+  // a tiny window: never below the readable floor
+  assert.equal(fitFontSize(24, 120), 9);
+  // the 25-row mode fits a hair smaller than the 24-row mode at the same height
+  assert.ok(fitFontSize(25, 345) <= fitFontSize(24, 345));
+});
+
 test('the glass box resizes in character units with the mode', async () => {
   const net = await import('../../public/js/net.js');
   net.setSocket({ readyState: 1, sent: [], send: () => {} });

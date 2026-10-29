@@ -16,6 +16,12 @@ export const SCREEN_MODES = [
 
 export const CARD_COLUMNS = 80; // a punch card holds 80 columns — the deck obeys
 
+/** The biggest font (px) whose row height fits `rowCount` rows in `availablePx`. */
+export function fitFontSize(rowCount, availablePx, min = 9, max = 16) {
+  const cell = availablePx / Math.max(1, rowCount);
+  return Math.max(min, Math.min(max, Math.floor(cell / 1.15)));
+}
+
 export class Screen {
   constructor(cols = 80, rows = 24) {
     this.resize(cols, rows);
@@ -254,6 +260,9 @@ export class Editor {
       this.cmd.value = '';
       this._enter(raw);
     });
+
+    // keep the glass fitted when the window changes shape
+    if (global.addEventListener) global.addEventListener('resize', () => this.renderGlass());
 
     // the mainframe talks to this terminal directly
     for (const t of ['jobQueued', 'jobPosition', 'jobRunning', 'jobDone', 'jobKilled']) {
@@ -499,7 +508,8 @@ export class Editor {
     this.renderGlass();
   }
 
-  /** Paint the glass: a bezel opening sized in CHARACTER units — cols × rows. */
+  /** Paint the glass: a bezel opening sized in CHARACTER units — cols × rows —
+   * with the cell scaled so the whole glass always fits the window vertically. */
   renderGlass() {
     this.out.textContent = '';
     for (const row of this.screen.rows) {
@@ -508,9 +518,14 @@ export class Editor {
       div.textContent = row;
       this.out.appendChild(div);
     }
+    // fit vertically: the cell shrinks on short windows, the grid never changes
+    const chrome = 230; // header + status + command row + paddings + bezel
+    const availH = Math.max(160, (global.innerHeight || 800) - chrome);
+    const fs = fitFontSize(this.screen.rowCount, availH);
+    this.out.style.fontSize = fs + 'px';
     // the visible glass hugs the grid: N columns wide, M rows tall
     this.out.style.width = `calc(${this.screen.cols}ch + 26px)`;
-    this.out.style.height = `calc(${this.screen.rowCount} * 1.15em + 22px)`;
+    this.out.style.height = `calc(${this.screen.rowCount} * ${(fs * 1.15).toFixed(2)}px + 22px)`;
     if (this.onGlass) this.onGlass(this.screen.rows);
   }
 
