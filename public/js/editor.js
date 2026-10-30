@@ -368,28 +368,39 @@ export class Editor {
           if (args.length === 0) this.print(this.deck.format(1, this.deck.count()));
           else {
             const range = args[0].split('-').map((x) => parseInt(x, 10));
+            if (range.some((n) => !Number.isInteger(n))) throw new Error('BAD LINE NUMBER');
             this.print(this.deck.format(range[0], range[1] ?? range[0]));
           }
           break;
         case 'I': {
           const n = parseInt(args[0], 10);
-          if (args[1] !== undefined) { // one-shot: I 5 TEXT
+          if (args[0] === undefined) { // I alone: start typing at the end of the deck
+            this.inserting = this.deck.count() + 1;
+            this.print([`.INSERT MODE — TYPE LINES; A LINE '.' ENDS`]);
+            this._status();
+          } else if (args[1] !== undefined) { // one-shot: I 5 TEXT
             this.deck.insertBefore(n, args[1]);
             this.print([`LINE ${n} INSERTED`]);
-          } else {
+          } else if (Number.isInteger(n)) {
             this.inserting = n;
             this.print([`.INSERT MODE — TYPE LINES BEFORE ${n}; A LINE '.' ENDS`]);
             this._status();
+          } else {
+            throw new Error('BAD LINE NUMBER (TRY: I 5)');
           }
           break;
         }
         case 'C':
-          if (args[1] === undefined) throw new Error('C REQUIRES TEXT');
+          if (!Number.isInteger(parseInt(args[0], 10)) || args[1] === undefined) {
+            throw new Error('C REQUIRES A LINE NUMBER AND TEXT (TRY: C 3 LI $T0, 1)');
+          }
           this.deck.change(parseInt(args[0], 10), args[1]);
           this.print([`LINE ${args[0]} CHANGED`]);
           break;
         case 'D': {
+          if (args[0] === undefined) throw new Error('D REQUIRES A LINE NUMBER (TRY: D 3 OR D 3-5)');
           const range = args[0].split('-').map((x) => parseInt(x, 10));
+          if (range.some((n) => !Number.isInteger(n))) throw new Error('BAD LINE NUMBER');
           this.deck.deleteRange(range[0], range[1] ?? range[0]);
           this.print([`DELETED ${range[0]}${range[1] && range[1] !== range[0] ? '-' + range[1] : ''}`]);
           break;

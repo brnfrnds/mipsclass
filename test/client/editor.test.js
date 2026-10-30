@@ -155,6 +155,28 @@ test('plain terminal traffic is always visible on the glass (the boot banner and
   assert.ok(rows.every((d) => !d.classList.contains('folded')), 'glass rows are never folded');
 });
 
+test('I with no line number appends; bad numbers get friendly messages, never NaN', async () => {
+  const net = await import('../../public/js/net.js');
+  net.setSocket(fake);
+  fake.sent.length = 0;
+  const { Editor } = await import('../../public/js/editor.js');
+  const ed = new Editor({ container: makeEl('div'), teletype: false });
+  const before = ed.deck.count();
+
+  ed._enter('I'); // no number: append at the end
+  ed._enter('NEW LAST LINE');
+  ed._enter('.');
+  assert.equal(ed.deck.count(), before + 1, 'I alone appends');
+  assert.equal(ed.deck.line(ed.deck.count()), 'NEW LAST LINE');
+
+  ed._enter('D'); // no number: a clean message, not LINE NAN
+  assert.ok(ed.out.textContent.includes('D REQUIRES A LINE NUMBER'), 'friendly D error');
+
+  ed._enter('L ABC');
+  assert.ok(ed.out.textContent.includes('BAD LINE NUMBER'), 'friendly L error');
+  assert.ok(!ed.out.textContent.includes('NAN'), 'NaN never reaches the glass');
+});
+
 test('createTypingPulse sends typing true on press and false after idle', async () => {
   const { createTypingPulse } = await import('../../public/js/editor.js');
   const sent = [];
