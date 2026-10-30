@@ -16,10 +16,12 @@ export const SCREEN_MODES = [
 
 export const CARD_COLUMNS = 80; // a punch card holds 80 columns — the deck obeys
 
-/** The biggest font (px) whose row height fits `rowCount` rows in `availablePx`. */
-export function fitFontSize(rowCount, availablePx, min = 9, max = 16) {
-  const cell = availablePx / Math.max(1, rowCount);
-  return Math.max(min, Math.min(max, Math.floor(cell / 1.15)));
+/** The biggest font (px) whose grid fits the window: constrained by height
+ * (rows must fit) and by width (cols must fit). Floors at a readable min. */
+export function fitFontSize(rowCount, availablePx, cols = 80, availableW = 1200, min = 9, max = 34) {
+  const byHeight = availablePx / Math.max(1, rowCount) / 1.15;
+  const byWidth = availableW / (Math.max(1, cols) * 0.55); // VT323's advance ≈ 0.55em
+  return Math.max(min, Math.min(max, Math.floor(Math.min(byHeight, byWidth))));
 }
 
 export class Screen {
@@ -529,10 +531,12 @@ export class Editor {
       div.textContent = row;
       this.out.appendChild(div);
     }
-    // fit vertically: the cell shrinks on short windows, the grid never changes
-    const chrome = 230; // header + status + command row + paddings + bezel
+    // fit the window: the cell grows on tall windows (the glass FILLS the
+    // height) and shrinks on short/narrow ones — the grid never changes
+    const chrome = 210; // header + status + command row + paddings + bezel
     const availH = Math.max(160, (globalThis.innerHeight || 800) - chrome);
-    const fs = fitFontSize(this.screen.rowCount, availH);
+    const availW = Math.max(240, (globalThis.innerWidth || 1000) - 80);
+    const fs = fitFontSize(this.screen.rowCount, availH, this.screen.cols, availW);
     this.out.style.fontSize = fs + 'px';
     // the visible glass hugs the grid: N columns wide, M rows tall
     this.out.style.width = `calc(${this.screen.cols}ch + 26px)`;
