@@ -58,7 +58,16 @@ export class Screen {
 // lowercase, so $xx tokens keep their case through the machine.
 // ---------------------------------------------------------------------------
 export function upperLine(text) {
-  return String(text).toUpperCase().replace(/\$[A-Z0-9]+/g, (m) => m.toLowerCase());
+  // uppercase everything EXCEPT $register tokens and backslash escapes
+  // (\n, \t… are case-sensitive in MARS strings — \N is not an escape)
+  return String(text)
+    .split(/(\$[A-Za-z0-9]+|\\[a-zA-Z])/g)
+    .map((part) => {
+      if (/^\$[A-Za-z0-9]+$/.test(part)) return part.toLowerCase(); // registers: canonical lowercase ($V0 → $v0)
+      if (/^\\[a-zA-Z]$/.test(part)) return part[0] + part[1].toLowerCase(); // \N → \n
+      return part.toUpperCase();
+    })
+    .join('');
 }
 
 export function parseCommand(line) {

@@ -9,6 +9,26 @@ test('parseCommand uppercases, trims, and splits a command', async () => {
   assert.deepEqual(parseCommand('   '), null, 'blank input is not a command');
 });
 
+test('upperLine preserves escape sequences (newlines survive uppercasing)', async () => {
+  const { upperLine } = await import('../../public/js/editor.js');
+  assert.equal(upperLine('.asciiz "hi\\nworld"'), '.ASCIIZ "HI\\nWORLD"', 'the \\n escape survives');
+  assert.equal(upperLine('.asciiz "a\\tb\\nc"'), '.ASCIIZ "A\\tB\\nC"', 'tab and newline escapes survive');
+  assert.equal(upperLine('li $t0, 4'), 'LI $t0, 4');
+  assert.equal(upperLine('ADD $t1, $t2, $t3'), 'ADD $t1, $t2, $t3');
+  assert.equal(upperLine('plain text'), 'PLAIN TEXT');
+});
+
+test('the deck stores newline escapes intact (a multi-line printout works)', async () => {
+  const { Deck } = await import('../../public/js/editor.js');
+  const d = new Deck();
+  d.append('.data');
+  d.append('msg: .asciiz "LINE ONE\\nLINE TWO"');
+  d.append('.text');
+  const stored = d.line(2);
+  assert.ok(stored.includes('\\n'), 'the escape is in the stored card');
+  assert.ok(!stored.includes('\\N'), 'never uppercased to \\N');
+});
+
 test('parseCommand keeps argument text intact apart from casing', async () => {
   const { parseCommand } = await import('../../public/js/editor.js');
   assert.deepEqual(parseCommand('c 2 add $t0, $t1, $t2  '), { cmd: 'C', args: ['2', 'ADD $t0, $t1, $t2'] });
