@@ -18,8 +18,9 @@ function makeEl(tag) {
     set className(v) { set.clear(); String(v).split(/\s+/).filter(Boolean).forEach((c) => set.add(c)); },
     get textContent() { return el.children.length ? el.children.map((c) => c.textContent).join('') : (el._text || ''); },
     set textContent(v) { el._text = v; el.children = []; },
-    appendChild(c) { el.children.push(c); return c; },
-    addEventListener: noop, removeEventListener: noop, remove: noop, focus: noop,
+    appendChild(c) { c._parent = el; el.children.push(c); return c; },
+    addEventListener: noop, removeEventListener: noop, focus: noop,
+    remove() { if (el._parent) { const i = el._parent.children.indexOf(el); if (i >= 0) el._parent.children.splice(i, 1); } },
     click() { if (el.onclick) el.onclick(); },
     classList: {
       add(...cs) { cs.forEach((c) => String(c).split(/\s+/).filter(Boolean).forEach((x) => set.add(x))); },
@@ -206,6 +207,24 @@ test('pasting a multi-line program reads it into the deck like a tape', async ()
   assert.equal(ed.deck.count(), before + 3, 'three lines read in');
   assert.equal(ed.deck.line(before + 1), 'LI $v0, 1', 'registers normalized');
   assert.ok(ed.out.textContent.includes('TAPE'), 'the terminal says the tape was read');
+});
+
+test('flashFlames overlays the open terminal and clears itself; ignores a hidden terminal', async () => {
+  const net = await import('../../public/js/net.js');
+  net.setSocket(fake);
+  const { Editor } = await import('../../public/js/editor.js');
+  const ed = new Editor({ container: makeEl('div'), teletype: false });
+  // hidden terminal: no flash
+  ed.flashFlames();
+  assert.equal(ed.el.querySelectorAll('.editor-flames').length, 0, 'no flames on a hidden terminal');
+  // open terminal: the flames overlay appears and self-clears
+  ed.show();
+  ed.flashFlames();
+  assert.ok(ed.el.querySelectorAll('.editor-flames').length === 1, 'flames on screen');
+  assert.ok(ed.el.classList.contains('shaking'), 'the terminal shakes');
+  await new Promise((r) => setTimeout(r, 1500));
+  assert.equal(ed.el.querySelectorAll('.editor-flames').length, 0, 'the flames clear after the flash');
+  assert.ok(!ed.el.classList.contains('shaking'), 'the shake clears');
 });
 
 test('createTypingPulse sends typing true on press and false after idle', async () => {

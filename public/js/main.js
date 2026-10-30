@@ -178,7 +178,10 @@
     net.on('playerJoined', (m) => players.add(m.player));
     net.on('playerLeft', (m) => players.remove(m.seatIndex));
     net.on('playerTyping', (m) => players.setTyping(m.seatIndex, m.typing));
-    net.on('playerBlownUp', (m) => { players.explode(m.seatIndex); sound.boom(); });
+    net.on('playerBlownUp', (m) => {
+      players.explode(m.seatIndex);
+      sound.boom();
+    });
 
     // Local gadget writes: instant 3D feedback (gadgets.js already reports to the server).
     gadgets.onWrite((key, model) => refreshGadgetVisuals(model));
@@ -197,6 +200,10 @@
     editor.onRef = () => ref.toggle();
     net.on('joined', () => editor.show());
     net.on('joined', (m) => { if (m.operator) editor.setOperator(); });
+    // when YOUR machine explodes under your fingers: flames on the terminal
+    net.on('playerBlownUp', (m) => {
+      if (m.seatIndex === mySeatIndex) editor.flashFlames();
+    });
     const hudBtn = document.createElement('button');
     hudBtn.className = 'hud-editor-btn';
     hudBtn.textContent = 'Editor';

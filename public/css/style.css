@@ -328,6 +328,40 @@ html, body {
   font-size: 20px;
   text-shadow: 0 0 6px rgba(53, 255, 110, 0.45);
 }
+
+/* ---------- when YOUR machine explodes under your fingers ---------- */
+@keyframes flame-flash {
+  0% { opacity: 0; }
+  8% { opacity: 1; }
+  22% { opacity: 0.55; }
+  38% { opacity: 0.95; }
+  55% { opacity: 0.45; }
+  72% { opacity: 0.75; }
+  100% { opacity: 0; }
+}
+@keyframes editor-shake {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-7px, 3px); }
+  50% { transform: translate(6px, -4px); }
+  75% { transform: translate(-4px, 2px); }
+}
+.editor-flames {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  background:
+    radial-gradient(ellipse 60% 45% at 18% 100%, rgba(255, 110, 0, 0.65), transparent 60%),
+    radial-gradient(ellipse 50% 55% at 50% 100%, rgba(255, 210, 0, 0.6), transparent 65%),
+    radial-gradient(ellipse 60% 45% at 82% 100%, rgba(255, 60, 0, 0.7), transparent 60%),
+    radial-gradient(ellipse 90% 70% at 50% 60%, rgba(255, 90, 0, 0.3), transparent 75%),
+    linear-gradient(to top, rgba(255, 140, 0, 0.35), transparent 45%);
+  animation: flame-flash 1.2s ease-out forwards;
+}
+.editor.shaking {
+  animation: editor-shake 0.45s linear;
+}
 .editor::after {
   content: "";
   position: absolute;

@@ -605,6 +605,17 @@ export class Editor {
     this._status();
   }
 
+  /** Your own machine just exploded: flames flash over the terminal for a sec. */
+  flashFlames() {
+    if (this.el.style.display !== 'flex') return; // the office shows the explosion instead
+    const flames = document.createElement('div');
+    flames.className = 'editor-flames';
+    this.el.appendChild(flames);
+    this.el.classList.add('shaking');
+    setTimeout(() => flames.remove(), 1200);
+    setTimeout(() => this.el.classList.remove('shaking'), 450);
+  }
+
   show() { this.el.style.display = 'flex'; this.cmd.focus(); }
   hide() { this.el.style.display = 'none'; }
   destroy() {
