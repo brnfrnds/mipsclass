@@ -265,6 +265,13 @@ export class Editor {
 
     const pulse = createTypingPulse((m) => net.send(m));
     this.cmd.addEventListener('input', () => { pulse(); sound.clack(); });
+    this.cmd.addEventListener('paste', (e) => {
+      const t = e.clipboardData ? e.clipboardData.getData('text') : '';
+      if (t && t.includes('\n')) {
+        e.preventDefault();
+        this._paste(t);
+      }
+    });
     this.cmd.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter') return;
       const raw = this.cmd.value;
@@ -337,6 +344,28 @@ export class Editor {
       lines.push('  #' + j.id + '  ' + j.state.toUpperCase() + '  ' + j.lineCount + ' LINES');
     }
     this.print(lines);
+  }
+
+  /** A multi-line paste: read the lines into the deck like a paper tape. */
+  _paste(text) {
+    const lines = String(text).split('\n').map((l) => l.trim()).filter(Boolean);
+    if (!lines.length) return;
+    if (this.inserting !== null) {
+      for (const l of lines) {
+        try {
+          this.deck.insertBefore(this.inserting, l);
+          this.inserting++;
+        } catch (err) {
+          this.print([String(err.message).toUpperCase()]);
+          break;
+        }
+      }
+      this._status();
+    } else {
+      lines.forEach((l) => this.deck.append(l));
+      this.print([lines.length + ' LINES READ FROM TAPE']);
+    }
+    this.print(this.deck.format(Math.max(1, this.deck.count() - lines.length + 1), this.deck.count()));
   }
 
   _clearJob() {

@@ -195,6 +195,19 @@ test("the program's output waits for the listing to finish printing", async () =
   assert.ok(document.body.textContent.includes('42'), 'the output printed after the listing');
 });
 
+test('pasting a multi-line program reads it into the deck like a tape', async () => {
+  const net = await import('../../public/js/net.js');
+  net.setSocket(fake);
+  fake.sent.length = 0;
+  const { Editor } = await import('../../public/js/editor.js');
+  const ed = new Editor({ container: makeEl('div'), teletype: false });
+  const before = ed.deck.count();
+  ed._paste('LI $V0, 1\nLI $A0, 42\nSYSCALL');
+  assert.equal(ed.deck.count(), before + 3, 'three lines read in');
+  assert.equal(ed.deck.line(before + 1), 'LI $v0, 1', 'registers normalized');
+  assert.ok(ed.out.textContent.includes('TAPE'), 'the terminal says the tape was read');
+});
+
 test('createTypingPulse sends typing true on press and false after idle', async () => {
   const { createTypingPulse } = await import('../../public/js/editor.js');
   const sent = [];
