@@ -262,7 +262,7 @@ export class Editor {
     });
 
     // keep the glass fitted when the window changes shape
-    if (global.addEventListener) global.addEventListener('resize', () => this.renderGlass());
+    if (globalThis.addEventListener) globalThis.addEventListener('resize', () => this.renderGlass());
 
     // the mainframe talks to this terminal directly
     for (const t of ['jobQueued', 'jobPosition', 'jobRunning', 'jobDone', 'jobKilled']) {
@@ -520,7 +520,7 @@ export class Editor {
     }
     // fit vertically: the cell shrinks on short windows, the grid never changes
     const chrome = 230; // header + status + command row + paddings + bezel
-    const availH = Math.max(160, (global.innerHeight || 800) - chrome);
+    const availH = Math.max(160, (globalThis.innerHeight || 800) - chrome);
     const fs = fitFontSize(this.screen.rowCount, availH);
     this.out.style.fontSize = fs + 'px';
     // the visible glass hugs the grid: N columns wide, M rows tall
