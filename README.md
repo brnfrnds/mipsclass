@@ -1,12 +1,12 @@
 # MIPS Office
 
-A networked browser game set in an 80s office. Everyone sits at a CRT terminal and does their job the only way an 80s office knows how: by writing MIPS assembly. Print a document, update the display board, drive the game controller — all by storing bytes into memory-mapped office gadgets. If your program crashes hard enough, your computer explodes and the whole office sees it.
+A networked browser game set in an 80s office. Everyone sits around a round conference table with a CRT terminal, and does their job the only way an 80s office knows how: by writing MIPS assembly — on a **batch mainframe**. You don't run programs; you **submit jobs** and wait your turn while the machine processes the room's deck queue. Your assembler listing prints onto your paper card line-by-line with teletype clatter. And if you write bad code, your computer explodes and the whole office sees it.
 
 ## Requirements
 
-- Node.js 18+ (uses the built-in test runner and `fetch`)
+- Node.js 18+ (the built-in test runner; the vendored simulator also runs in Node)
 - Any modern browser with WebGL
-- Internet on first load (Three.js comes from a CDN)
+- Internet on first load (Three.js and the fonts come from CDNs)
 
 ## Quick start
 
@@ -29,91 +29,107 @@ Then open **http://localhost:3000**. The server listens on port 3000 and serves 
 
 Notes:
 
-- The server holds **all state in memory** — rooms, seats, gadget text. Restarting wipes every room and disconnects every player (their tabs drop back to the join screen).
-- `npm run stop` is surgical: it stops the process bound to port 3000 only, so other node processes (editors, tooling) are untouched.
-- To change the port, start it programmatically: `node -e "require('./server/index.js').createServer({ port: 8080 })"` — or edit the default in `server/index.js`.
-- Server logs (connections, WS messages) print to the console that started it; a background start logs to that console until it closes.
-
+- The server holds **all state in memory** — rooms, seats, the job queues, gadget state. Restarting wipes every room and disconnects every player (their tabs drop back to the join screen).
+- `npm run stop` is surgical: it stops the process bound to port 3000 only, so other node processes are untouched.
+- Different port: `node -e "require('./server/index.js').createServer({ port: 8080 })"` — or edit the default in `server/index.js`.
 
 ## Playing
 
-The first screen is the join panel.
+The first screen is an **interoffice memo**.
 
-1. **Create a room (admin).** Enter a seat count and press *Create Room*. You get a room ID — share it with the other players (copy it into the Room ID field on their screens, or just send them the text).
-2. **Join a room.** Paste the room ID, press *Join Room*, and the seat grid appears.
-3. **Pick a seat.** Free seats are dark; taken seats are red. Click a free one.
-4. **Enter your name** and a **profile picture URL** (optional — the name tag falls back to text-only if the image doesn't load).
-5. Press **Sit at Seat**. The overlay lifts and you're in the office, standing at your terminal.
+1. **Create a room (admin).** Enter a seat count and press *Open a room*. You get a room ID — share it.
+2. **Join a room.** Paste the room ID, press *Find my room*, the seat grid appears.
+3. **Pick a seat.** Free seats are outlined; taken seats are hatched. Click a free one.
+4. **Your name** and a **profile picture URL** (optional — the tag falls back to text).
+5. **Sit down.** The memo lifts, your camera glides behind your avatar, and you're in the office.
 
-While in the room you can see the other players at their seats: their name tags and profile pictures float above their desks, and their keyboards bang while they type.
+**The first joiner of a room becomes its operator** — the person who runs the machine (see *The operator* below).
 
-## Programming your terminal
+## The terminal: a line editor
 
-Press **Run**'s neighbor — the editor overlay covers the screen with a monospace textarea. It speaks the MARS assembly dialect (`.data`/`.text`, labels, pseudo-instructions, syscalls), assembled and executed locally in your browser by the MARS simulator.
+The **Editor** button (top-right HUD) or sitting down opens your terminal: a phosphor-green **character glass** (a real grid: 80 columns × 24 rows by default), a status line, and a command line with a `>` prompt. You don't edit text with a cursor — you **command the machine**:
 
-A program that prints to your terminal's output log:
+| Command | What it does |
+|---|---|
+| `L` | List the whole deck |
+| `L 3-7` | List lines 3 to 7 |
+| `I 5` | Insert mode before line 5 — type lines, a lone `.` ends |
+| `I` | Insert at the end of the deck |
+| `I 5 TEXT` | One-shot: insert that line before line 5 |
+| `I TEXT` | Append the line to the deck |
+| `C 3 TEXT` | Replace line 3 with TEXT |
+| `D 3` / `D 3-5` | Delete a line / a range |
+| `T` | Show the top of the deck |
+| `MODE` | Cycle the glass: 80×24 (VT-80) → 80×25 (PC-80) → 40×25 (C64-40) |
+| `SUBMIT` | Send the deck to the mainframe's queue |
+| `KILL n` / `BUMP n` | Operator only — kill / prioritize job n |
+| `REF` | The reference card |
+| `HELP` | The command summary |
 
-```asm
-        .data
-msg:    .asciiz "Hello from MIPS\n"
-        .text
-        .globl main
-main:
-        li   $v0, 4        # syscall 4: print string
-        la   $a0, msg
-        syscall
-        li   $v0, 10       # syscall 10: exit
-        syscall
-```
+- Everything you type is **uppercased** (the teletype had no lowercase) — except `$registers`, which normalize to lowercase (MARS demands it), and `\n`-style **string escapes**, which survive intact.
+- The deck obeys the **punch-card limit: 80 columns** — longer lines are refused.
+- **Pasting** a multi-line program into the command line reads it into the deck like paper tape (`5 LINES READ FROM TAPE`).
+- The glass is a real character grid: text wraps at the column count, the newest line appears at the cursor, and the screen scrolls only when the cursor passes the bottom row. Your 3D CRT mirrors the glass live.
 
-Press **Run** to assemble and execute. Assembly errors and runtime errors are reported in the log below the editor. **Clear** empties the editor and the log.
+## The batch loop: submit, wait, read the paper
 
-### The office gadget memory map
+There is no Run button. `SUBMIT` sends your deck to the **mainframe queue**:
 
-Office hardware is memory-mapped into the top of the simulator's static-data window. Store bytes (`sb`) into a gadget's range and the bytes are appended to that gadget's text — which every player in the room sees on their gadget panel, because every write is broadcast.
+1. Your terminal locks the job: `JOB #3 — QUEUED, 2 AHEAD` (you can keep editing your deck for your *next* submission — one outstanding job per player; a second SUBMIT is refused until the first clears).
+2. The wait: each job takes `1s + 0.2s × lines of assembly`; your wait is every job ahead of yours plus your own.
+3. When your slot arrives, the mainframe hum starts and your **listing prints onto your paper card line-by-line at teletype pace** (~15 lines/s, clatter included):
+   - **SOURCE** — your lines with error flags (`†`) in the margin — printed open
+   - **MACHINE CODE** — the assembled words with addresses — printed folded; click the header to open
+   - **SYMBOLS** — labels and their addresses — folded
+   - `== ASSEMBLY CLEAN ==` or `== ASSEMBLY HALTED ==`
+4. If it assembled: **the program runs** — and its output prints below a dashed divider on the same card.
+5. The terminal returns to `READY` and you can submit again.
 
-| Gadget          | Base address  | Size    | Write semantics                        |
-|-----------------|---------------|---------|----------------------------------------|
-| Office printer  | `0x10030000`  | 0x1000  | Each byte is appended as an ASCII char |
-| Display board   | `0x10031000`  | 0x1000  | Each byte is appended as an ASCII char |
-| Game controller | `0x10032000`  | 0x1000  | Writes are recorded to shared state    |
+**Bad code is dangerous.** An assembly error or a runtime crash (bad address, bad syscall) makes your computer **explode**: your CRT and your avatar hop on a smooth parabola while debris flies ballistic arcs, bounces on the tabletop and rains onto the carpet (time-based physics — identical at any frame rate), and if your terminal was open, **flames flash across the glass** while it shakes. Everyone in the room sees your computer explode across the table; you get the flames under your fingers.
 
-Printing `HI!` to the office printer:
+## The office gadgets (memory-mapped I/O)
 
-```asm
-        .text
-        .globl main
-main:
-        li   $t0, 0x10030000   # printer buffer
-        li   $t1, 72           # 'H'
-        sb   $t1, 0($t0)
-        li   $t1, 73           # 'I'
-        sb   $t1, 1($t0)
-        li   $t1, 33           # '!'
-        sb   $t1, 2($t0)
-        li   $v0, 10
-        syscall
-```
+Office hardware is memory-mapped into the top of the simulator's static-data window. Programs "use" a gadget by storing into its range.
 
-Useful addresses for building these constants: `li $t0, 0x10030000` assembles fine directly. Updating the display board is the same program with `0x10031000`.
+| Gadget | Address | Visibility | Write semantics |
+|---|---|---|---|
+| Office printer | `0x10030000` | **Private** — only your screen | `sb` — one ASCII byte per store |
+| Display board | `0x10031000` | **Shared** — the wall board, everyone's | `sb` — one ASCII byte per store |
+| Game controller | `0x10032000` | **Shared** — the state everyone sees | `sw` — raw words |
 
-A word of caution: these addresses are inside the simulator's static-data window (the heap starts at `0x10040000`), but they are far above where the assembler places your own `.data` (which starts at `0x10010000`). Don't overwrite your own strings.
+- Your **printouts** render as a paper card — always on top, live-updating, **Tear off** to dismiss (the next byte re-pins it).
+- The **display board** is the wall bulletin: any player's program changes what the whole office reads.
+- The printer card shows your job's listing *and* its output (the listing above a dashed divider, then the program's own printout).
 
-### Blowing up
+A caution: the gadget addresses live in the simulator's static-data window (the heap starts at `0x10040000`); your own `.data` starts at `0x10010000` — don't overwrite your own strings.
 
-Runtime faults — bad addresses, unimplemented syscalls, arithmetic disasters — reject the run with a typed error and show up in your log as `RUN ERROR: …`. The office-wide explosion broadcast is wired on the server; see *Known limitations* below for the client trigger.
+## The reference card
 
-## Multiplayer: what's shared
+The **Reference** HUD button (or `REF` in the terminal) opens the green card: the operator's cheat sheet, always on top, draggable by its header, foldable, with a filter box.
 
-The server keeps one shared state object per room and broadcasts changes to everyone:
+- **MACHINE** — the gadget map above
+- **EDITOR COMMANDS** — the machine documents itself
+- **INSTRUCTIONS** — **623 instructions generated from the simulator itself** (grouped: MEMORY / BRANCH-JUMP / ARITHMETIC-LOGIC / SYSTEM), each with its example; pseudo-instructions badged `(PSEUDO)`
+- **SYSCALLS** — 1 print int, 4 print string, 10 exit, 11 print char
+- **REGISTERS** — the 32, with scratch/saved conventions
+- **ASCII** — a hand-encoding table (A–Z, 0–9, punctuation as decimal) for `sb` bytes
 
-- **Gadget state** — printer text, board text, controller writes. Everyone sees the same office hardware.
-- **Presence** — who joined which seat, who left.
-- **Typing** — the keyboard-banging animation on another player's desk.
-- **Blow-ups** — an explosion at a player's seat, visible to the whole room.
-- **Cable messages** — two computers can be cabled together and exchange messages relayed through the server.
+There is no autocomplete in the editor — the card is where you look things up. That's the era.
 
-## Cabling two computers together
+## Sound
+
+All synthesized with Web Audio (no asset files): key clacks while you type, teletype clatter while listings print, the printer's dot-matrix buzz per character, a low mainframe hum while a job is on the machine, and a boom for explosions. The **Sound: On/Off** HUD toggle mutes everything.
+
+## Multiplayer
+
+- Presence: who joined which seat, who left (a disconnect frees the seat and kills their queued job)
+- Typing: other players see your avatar bang the keyboard
+- Explosions: office-wide, seat-targeted
+- The display board: shared office state
+- Printouts: **private** to each operator
+- Cable pairs (see below) and the controller state: shared
+
+### Cabling two computers
 
 Cable pairs are configured in server code, per room. In `server/index.js`, in the `POST /rooms` handler after the room is created:
 
@@ -123,40 +139,45 @@ rooms.set(roomId, new Room(count));
 rooms.get(roomId).addCablePair(0, 1, { base: 0x1000, size: 256 });
 ```
 
-Once cabled, a `cableMessage` from one seat is relayed by the server to the other seat only — never to the rest of the room.
+Once cabled, a `cableMessage` from one seat is relayed to the other seat only — never the rest of the room.
 
 ## Architecture
 
 ```
-Browser (per player)                       Server (Node, in-memory)
-┌──────────────────────────┐               ┌─────────────────────────┐
-│ Three.js office scene    │               │ rooms: Map<id, Room>    │
-│  ├ terminal seats, CRTs  │   WebSocket   │  ├ seats, players       │
-│  ├ gadget sprites        │◄─────────────►│  ├ gadgetState (shared) │
-│  ├ editor (MARS asm)     │  JSON events  │  ├ cablePairs           │
-│  └ @specy/mips simulator │               │  └ relays broadcasts    │
-└──────────────────────────┘               └─────────────────────────┘
+Browser (per player)                        Server (Node, in-memory)
+┌─────────────────────────────┐             ┌──────────────────────────┐
+│ Three.js office             │             │ rooms: Map<id, Room>     │
+│  ├ round table + humanoids  │             │  ├ seats, players        │
+│  ├ terminal glass (80×24)   │  WebSocket  │  ├ gadgetState (shared)  │
+│  ├ line editor + deck       │◄───────────►│  ├ job queues (simulated)│
+│  ├ vendored MARS sim        │  JSON events│  ├ cablePairs            │
+│  ├ paper card (printouts)   │             │  └ creator = operator    │
+│  ├ reference card           │             └──────────────────────────┘
+│  └ Web Audio soundscape     │
+└─────────────────────────────┘
 ```
 
-- The MIPS simulator runs **only in your browser**; the server never assembles or executes anything.
-- Tasks are **client-trusted** — the server relays what clients report.
+- The MIPS simulator runs **only in your browser**; the server schedules the queue but never assembles or executes anything.
+- Everything is **client-trusted**.
 - Rooms live in memory. Restarting the server clears them.
 
 ### File map
 
 | Path | Role |
 |---|---|
-| `server/index.js` | HTTP server, static files, `POST /rooms`, `GET /rooms/:id`, WS wiring |
-| `server/room.js` | `Room` — seats, players, gadget state, cable pairs |
-| `server/ws.js` | WS message routing, room-scoped broadcast |
-| `public/js/scene.js` | Three.js scene, office geometry, render loop |
-| `public/js/terminal.js` | Per-seat desk, CRT (canvas texture), keyboard, gadget sprite |
-| `public/js/main.js` | Boot, join screen flow, event wiring |
-| `public/js/editor.js` | MIPS editor overlay, run/log |
-| `public/js/mips.js` | `MipsSim` wrapper around the vendored simulator |
-| `public/js/gadgets.js` | Gadget memory map, local model, gadgetUpdate sender |
-| `public/js/net.js` | WebSocket client with typed event emitter |
-| `public/js/players.js` | Name/pic sprites, typing bob, explosion particles |
+| `server/index.js` | HTTP server, static files, `POST /rooms`, `GET /rooms/:id`, WS wiring, the 250ms mainframe clock |
+| `server/room.js` | `Room` — seats, players, gadget state, cable pairs, the job queue, the creator |
+| `server/queue.js` | `JobQueue` — the simulated FIFO: submit/position/tick/kill/bump/drop, ETAs |
+| `server/ws.js` | WS message routing, room-scoped broadcast, owner-only job messages, operator queue |
+| `server/stop.ps1` | `npm run stop` — stop the process on :3000 |
+| `public/js/main.js` | Boot, join flow, event wiring, the CRT glass mirror |
+| `public/js/editor.js` | The terminal: line editor, deck, command parser, queue lifecycle, the listing builder, the Screen glass, flame flash |
+| `public/js/gadgets.js` | The gadget I/O map, the private printout card (listing + output, folds), the shared board |
+| `public/js/mips.js` | `MipsSim` — the wrapper over the vendored simulator |
+| `public/js/players.js` | Humanoids, name/pic sprites, typing arms, the explosion physics |
+| `public/js/reference.js` | The green card — generated from the sim's instruction set |
+| `public/js/sound.js` | The Web Audio soundscape |
+| `public/js/net.js` | The WebSocket client with a typed event emitter |
 | `public/js/lib/mips-core.mjs` | Vendored `@specy/mips` ESM build (do not edit) |
 
 ### WebSocket protocol
@@ -166,33 +187,38 @@ Messages are JSON with a `type` field.
 | Type | Direction | Meaning |
 |---|---|---|
 | `joinRoom` | client → server | `{roomId, seatIndex, name, profilePictureUrl}` |
-| `joined` | server → client | Your seat + full room state |
-| `playerJoined` | server → room | A new player took a seat |
-| `playerLeft` | server → room | Someone disconnected; seat is free again |
-| `typing` | client → server | `{typing: true/false}` while editing |
-| `playerTyping` | server → room | Relayed typing state for a seat |
-| `gadgetUpdate` | client → server | Gadget bytes written by a MIPS program |
-| `gadgetState` | server → room | Full shared gadget state after an update |
+| `joined` | server → client | Your seat, the operator flag, the full room state (players as an array) |
+| `playerJoined` / `playerLeft` | server → room | Presence |
+| `typing` / `playerTyping` | client → server / server → room | The keyboard-banging broadcast |
+| `submitJob` | client → server | `{lineCount}` — the deck enters the queue |
+| `jobQueued` / `jobPosition` | server → owner | `{jobId, position, etaMs}` |
+| `jobRunning` | server → owner | Your slot arrived — run your held deck |
+| `jobDone` | server → owner | The slot is over — the terminal returns to READY |
+| `jobKilled` | server → owner | The operator killed your job |
+| `killJob` / `bumpJob` | creator → server | Operator powers (validated server-side) |
+| `operatorQueue` | server → creator | The full queue snapshot |
+| `gadgetUpdate` / `gadgetState` | client → server / server → room | Shared gadget writes (board, controller) |
 | `playerBlownUp` | client → server, server → room | A terminal exploded |
-| `taskComplete` | client → server | Client-trusted task completion |
 | `cableMessage` | client → server, server → cabled peer | Relayed cable chat |
-| `error` | server → client | `seatTaken`, `unknownRoom`, `notCabled`, … |
+| `error` | server → client | `seatTaken`, `unknownRoom`, `notCabled`, `notOperator`, … |
 
 ## Development
 
 ```bash
-npm test        # runs the whole suite (32 tests) via node --test
+npm test        # 78 tests via node --test
 ```
 
-- Server tests: `test/server/` — room model, WS routing (with fake sockets), HTTP endpoints (real server on a random port).
-- Client tests: `test/client/` — Three.js stubbed with a minimal fake; `MipsSim` runs the real vendored simulator in Node.
-- The game was built task-by-task with test-first development; the design spec and implementation plan live under `docs/superpowers/`.
+- Server tests: the room model, the queue (ETAs, kill/bump, retiming), WS routing (fake sockets), the HTTP endpoints (a real server on a random port)
+- Client tests: the editor commands/deck (real sim integration), the Screen grid, the gadget programs from the field guide, the explosion physics (deterministic, time-stepped), the reference card, the typing pulse — Three.js stubbed minimally
+
+The design docs live under `docs/superpowers/` (the batch mainframe spec: `specs/2026-10-29-batch-mainframe-design.md`).
 
 ## Known limitations
 
-- **Typing broadcast is display-only.** The server relays typing and desks animate, but the editor doesn't send `typing` events yet — so nobody knows you're the one typing.
-- **Blow-ups need a trigger.** The server routes `playerBlownUp` and clients render explosions, but no client code detects a crashed run and sends it yet.
-- **Cables are half-wired.** Pairs and the shared-memory block are configurable server-side and messages relay correctly, but the receiving client doesn't display incoming `cableMessage` yet, and the shared memory block isn't actually synced between the two machines.
-- **Your output shows in the editor's log**, not on the 3D CRT — live screen mirroring is on the roadmap.
-- **The controller can be written, not read.** MIPS programs can't yet poll button state.
-- Rooms are in-memory and client-trusted; this is a game, not a bank.
+- **The queue is simulated** — jobs execute client-side when the server says their slot arrived; nothing is validated server-side yet. (The vendored sim runs in Node, so a true mainframe is a possible future.)
+- **Cable talk is half-wired** — pairs relay, but incoming messages aren't displayed and the shared memory block isn't synced between machines.
+- **The controller can be written, not read** — MIPS programs can't poll button state yet.
+- **No task system yet** — the batch loop is the sandbox; objectives would slot naturally onto it (a submitted job's listing output could be checked against a spec).
+- **Every failure is the full explosion** — no severity tiers yet.
+- **No session persistence** — a refresh rejoins from the memo; rooms die on a server restart.
+- The office was loud; this one is only as loud as your mute button allows.
