@@ -177,6 +177,24 @@ test('I with no line number appends; bad numbers get friendly messages, never Na
   assert.ok(!ed.out.textContent.includes('NAN'), 'NaN never reaches the glass');
 });
 
+test("the program's output waits for the listing to finish printing", async () => {
+  const net = await import('../../public/js/net.js');
+  net.setSocket(fake);
+  const { Editor } = await import('../../public/js/editor.js');
+  const ed = new Editor({ container: makeEl('div'), teletype: true }); // PACED
+  // a tiny program that prints the number 42 via syscall 1
+  ed._enter('D 1-8');
+  for (const l of ['LI $V0, 1', 'LI $A0, 42', 'SYSCALL', 'LI $V0, 10', 'SYSCALL']) ed._enter('I ' + l);
+  ed._enter('SUBMIT');
+  ed.onMessage({ type: 'jobRunning', jobId: 1 });
+
+  await new Promise((r) => setTimeout(r, 120)); // the listing is still typing...
+  assert.ok(!document.body.textContent.includes('42'), 'no output while the listing prints');
+
+  await new Promise((r) => setTimeout(r, 1600)); // the listing finished, the program ran
+  assert.ok(document.body.textContent.includes('42'), 'the output printed after the listing');
+});
+
 test('createTypingPulse sends typing true on press and false after idle', async () => {
   const { createTypingPulse } = await import('../../public/js/editor.js');
   const sent = [];

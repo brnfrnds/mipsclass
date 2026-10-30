@@ -389,15 +389,16 @@ export class Editor {
             this.inserting = this.deck.count() + 1;
             this.print([`.INSERT MODE — TYPE LINES; A LINE '.' ENDS`]);
             this._status();
-          } else if (args[1] !== undefined) { // one-shot: I 5 TEXT
+          } else if (Number.isInteger(n) && args[1] !== undefined) { // one-shot: I 5 TEXT
             this.deck.insertBefore(n, args[1]);
             this.print([`LINE ${n} INSERTED`]);
-          } else if (Number.isInteger(n)) {
+          } else if (Number.isInteger(n)) { // I 5: insert mode before line 5
             this.inserting = n;
             this.print([`.INSERT MODE — TYPE LINES BEFORE ${n}; A LINE '.' ENDS`]);
             this._status();
-          } else {
-            throw new Error('BAD LINE NUMBER (TRY: I 5)');
+          } else { // I TEXT: append the line to the deck
+            this.deck.append(args.join(' '));
+            this.print([`LINE APPENDED`]);
           }
           break;
         }
@@ -492,7 +493,7 @@ export class Editor {
     this._printListing(sim, deckLines);
   }
 
-  /** Print the assembler listing into the terminal pane, teletype-paced. */
+  /** Print the assembler listing; the program runs only when it finishes. */
   _printListing(sim, deckLines) {
     const listing = buildListing(sim, deckLines);
     const lines = [];
@@ -503,20 +504,20 @@ export class Editor {
     lines.push('=== SYMBOLS (' + listing.symbols.length + ') ===');
     for (const s of listing.symbols) lines.push('  ' + s.name.padEnd(12) + s.addr);
     lines.push(listing.hasErrors ? '== ASSEMBLY HALTED ==' : '== ASSEMBLY CLEAN ==');
-    this.printListing(lines);
-
-    if (listing.hasErrors) {
-      net.send({ type: 'blowUp' });
-      return;
-    }
-    sim.onScreenOutput = (t) => cardOutput(t); // the program's output prints onto the card too
-    sim.run().then(
-      (res) => this.print(['[STOPPED: ' + res.reason + ']']),
-      (err) => {
-        this.print(['RUN ERROR: ' + (err && err.message ? err.message : String(err))]);
-        if (err && err.name === 'RuntimeError') net.send({ type: 'blowUp' });
+    this.printListing(lines, () => {
+      if (listing.hasErrors) {
+        net.send({ type: 'blowUp' });
+        return;
       }
-    );
+      sim.onScreenOutput = (t) => cardOutput(t); // the program's output prints onto the card too
+      sim.run().then(
+        (res) => this.print(['[STOPPED: ' + res.reason + ']']),
+        (err) => {
+          this.print(['RUN ERROR: ' + (err && err.message ? err.message : String(err))]);
+          if (err && err.name === 'RuntimeError') net.send({ type: 'blowUp' });
+        }
+      );
+    });
   }
 
   /**
@@ -554,8 +555,8 @@ export class Editor {
   }
 
   /** The assembler listing prints onto the operator's own paper card. */
-  printListing(lines) {
-    cardListing(lines, this.teletype);
+  printListing(lines, onDone) {
+    cardListing(lines, this.teletype, onDone);
   }
 
   /** Cycle the glass through the historic modes, keeping the text. */

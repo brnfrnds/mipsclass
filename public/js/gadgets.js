@@ -73,7 +73,7 @@ function dismissCard() {
  * The job's printout: the assembler listing printed onto the paper card
  * line-by-line (teletype pace), sections foldable on the paper itself.
  */
-export function cardListing(lines, paced = true) {
+export function cardListing(lines, paced = true, onDone = null) {
   if (typeof document === 'undefined') return; // node tests: no DOM
   ensureCard();
   cardDismissed = false;
@@ -102,6 +102,7 @@ export function cardListing(lines, paced = true) {
     if (paced) setTimeout(emit, i * 66);
     else emit();
   });
+  if (onDone) paced ? setTimeout(onDone, lines.length * 66) : onDone();
 }
 
 function toggleCardFold(section) {
