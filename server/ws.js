@@ -36,18 +36,20 @@ function handleMessage(ws, rooms, parsed) {
       send(ws, { type: 'error', error: res.error });
       return;
     }
-    const isFirst = room.creatorId === null;
-    if (isFirst) room.creatorId = res.player.id; // the first joiner runs the machine
+    const isOperator = Boolean(
+      parsed.operatorToken && room.operatorToken && parsed.operatorToken === room.operatorToken
+    );
+    if (isOperator) room.operatorId = res.player.id;
     wsRooms.set(ws, { room, seatIndex: res.player.seatIndex, playerId: res.player.id });
     // state must survive JSON: players come as an array (a Map would stringify to {})
     send(ws, {
       type: 'joined',
       player: res.player,
-      operator: isFirst,
+      operator: isOperator,
       state: { ...room.getState(), players: Array.from(room.players.values()) },
     });
     broadcast(room, { type: 'playerJoined', player: res.player }, ws);
-    if (isFirst) sendOperatorQueue(room);
+    if (isOperator) sendOperatorQueue(room);
     return;
   }
 
@@ -103,7 +105,7 @@ function handleMessage(ws, rooms, parsed) {
 
     case 'killJob':
     case 'bumpJob': {
-      if (room.creatorId !== info.playerId) {
+      if (!room.operatorId || room.operatorId !== info.playerId) {
         send(ws, { type: 'error', error: 'notOperator' });
         return;
       }
@@ -142,6 +144,7 @@ function drop(ws) {
   if (!info) return;
   const room = info.room;
   room.leave(info.playerId);
+  if (room.operatorId === info.playerId) room.operatorId = null;
   const killed = room.queue.drop(info.playerId); // their job dies with them
   if (killed) {
     sendOperatorQueue(room);
@@ -169,8 +172,8 @@ function sendPositions(room) {
 
 /** The operator sees the whole queue. */
 function sendOperatorQueue(room) {
-  if (!room.creatorId) return;
-  const ws = wsFor(room, room.creatorId);
+  if (!room.operatorId) return;
+  const ws = wsFor(room, room.operatorId);
   if (ws) send(ws, { type: 'operatorQueue', jobs: room.queue.snapshot() });
 }
 

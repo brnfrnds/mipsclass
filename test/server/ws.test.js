@@ -5,7 +5,7 @@ const { handleMessage, drop } = require('../../server/ws');
 
 function makeRooms() {
   const rooms = new Map();
-  rooms.set('r1', new Room(4));
+  rooms.set('r1', new Room(4, { operatorName: 'Ana', operatorToken: 'tok' }));
   return rooms;
 }
 
@@ -130,4 +130,44 @@ test('drop frees the seat and broadcasts playerLeft to the remaining members', (
   const pl = b.sent.filter((m) => m.type === 'playerLeft');
   assert.equal(pl.length, 1, 'remaining member should hear about the departure');
   assert.equal(pl[0].seatIndex, 0);
+});
+
+test('operator is the token holder, even when a student sits first', () => {
+  const rooms = makeRooms();
+  const student = fakeWs();
+  const host = fakeWs();
+
+  handleMessage(student, rooms, { type: 'joinRoom', roomId: 'r1', seatIndex: 0, name: 'Bob' });
+  handleMessage(host, rooms, { type: 'joinRoom', roomId: 'r1', seatIndex: 1, name: 'Ana', operatorToken: 'tok' });
+
+  const studentJoined = student.sent.find((m) => m.type === 'joined');
+  const hostJoined = host.sent.find((m) => m.type === 'joined');
+  assert.equal(studentJoined.operator, false);
+  assert.equal(hostJoined.operator, true);
+  assert.ok(host.sent.some((m) => m.type === 'operatorQueue'), 'the operator gets the queue');
+  assert.equal(rooms.get('r1').operatorId, hostJoined.player.id);
+});
+
+test('a wrong token is not the operator; kill/bump are refused', () => {
+  const rooms = makeRooms();
+  const impostor = fakeWs();
+  handleMessage(impostor, rooms, { type: 'joinRoom', roomId: 'r1', seatIndex: 0, name: 'Mallory', operatorToken: 'nope' });
+  const joined = impostor.sent.find((m) => m.type === 'joined');
+  assert.equal(joined.operator, false);
+
+  impostor.sent.length = 0;
+  handleMessage(impostor, rooms, { type: 'killJob', jobId: 1 });
+  assert.ok(impostor.sent.some((m) => m.type === 'error' && m.error === 'notOperator'));
+});
+
+test('the operator can kill a job and loses the role on disconnect', () => {
+  const rooms = makeRooms();
+  const host = fakeWs();
+  handleMessage(host, rooms, { type: 'joinRoom', roomId: 'r1', seatIndex: 0, name: 'Ana', operatorToken: 'tok' });
+  host.sent.length = 0;
+  handleMessage(host, rooms, { type: 'killJob', jobId: 1 });
+  assert.equal(host.sent.some((m) => m.type === 'error' && m.error === 'notOperator'), false);
+
+  drop(host);
+  assert.equal(rooms.get('r1').operatorId, null);
 });
