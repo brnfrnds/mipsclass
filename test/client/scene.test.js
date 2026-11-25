@@ -12,7 +12,7 @@ const canvasStub = {
   }),
 };
 global.THREE = {
-  Scene: function () { this.children = []; this.background = null; this.add = (o) => this.children.push(o); },
+  Scene: function () { this.children = []; this.background = null; this.add = (o) => this.children.push(o); this.remove = (o) => { const i = this.children.indexOf(o); if (i >= 0) this.children.splice(i, 1); }; },
   PerspectiveCamera: function () { this.position = { set: noop }; this.lookAt = noop; this.aspect = 1; this.updateProjectionMatrix = noop; },
   WebGLRenderer: function () { this.setSize = (w, h) => { this.lastSize = { w, h }; }; this.render = noop; this.domElement = canvasStub; },
   BoxGeometry: function () {}, PlaneGeometry: function () {},
@@ -92,4 +92,31 @@ test('updateScreen marks texture needsUpdate after drawing text', () => {
   seat.texture.needsUpdate = false;
   terminalMod.updateScreen(seat, 'SEAT 1\nREADY');
   assert.strictEqual(seat.texture.needsUpdate, true, 'texture flagged for redraw');
+});
+
+test('buildTable builds a rectangular table and replaces the previous one', () => {
+  const { scene } = sceneMod.initScene(canvasStub);
+  const before = scene.children.length;
+  const dims = sceneMod.buildTable(10, 3.2);
+  assert.deepEqual(dims, { length: 10, depth: 3.2, top: 1.06 });
+  assert.ok(scene.children.length > before, 'table geometry added');
+
+  const mid = scene.children.length;
+  sceneMod.buildTable(4, 3.2);
+  assert.ok(scene.children.length <= mid, 'previous table removed before rebuilding');
+});
+
+test('rotateYaw turns a direction around the vertical axis', () => {
+  const r = sceneMod.rotateYaw(0, -1, Math.PI / 2);
+  assert.ok(Math.abs(r.x + 1) < 1e-9, 'facing -z, a +90° turn looks -x');
+  assert.ok(Math.abs(r.z) < 1e-9);
+});
+
+test('setLookOffset clamps to ±70° and getLookOffset reports the target', () => {
+  sceneMod.setLookOffset(Infinity);
+  assert.equal(sceneMod.getLookOffset(), sceneMod.LOOK_MAX);
+  sceneMod.setLookOffset(-Infinity);
+  assert.equal(sceneMod.getLookOffset(), -sceneMod.LOOK_MAX);
+  sceneMod.setLookOffset(0);
+  assert.equal(sceneMod.getLookOffset(), 0);
 });

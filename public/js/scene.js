@@ -12,16 +12,14 @@
     plaster: 0xD6CCB4,
   };
 
-  // The round conference table. Terminal place-settings sit on it; the
-  // radii for terminals, sitters and cameras live in main.js and are
-  // derived from these by trigonometry, not guesswork.
-  const TABLE = {
-    radius: 1.9,
-    top: 1.06, // world y of the tabletop surface
-  };
+  const TABLE_TOP = 1.06;
+  let tableGroup = null;
 
   let camTarget = { x: 0, y: 1.0, z: 0 };
   let camGoal = null; // { pos: {x,y,z}, target: {x,y,z} }
+  const LOOK_MAX = 70 * Math.PI / 180;
+  let lookTarget = 0;
+  let lookCurrent = 0;
 
   function makeCanvasTexture(w, h, painter, repeatX, repeatY) {
     const c = document.createElement('canvas');
@@ -170,28 +168,32 @@
     // the signature board on the wall
     const board = makeWallBoard(-3.2, 2.45, -5.97, 5.2, 1.8);
 
-    // the round conference table — everyone gathers around it
-    const tableWood = new THREE.MeshStandardMaterial({
-      map: makeCanvasTexture(256, 128, paintWood, 2, 2),
-      roughness: 0.6,
-    });
-    const pedestalMat = new THREE.MeshStandardMaterial({ color: 0x4A4038, roughness: 0.7, });
-    const top = new THREE.Mesh(new THREE.CylinderGeometry(TABLE.radius, TABLE.radius, 0.08, 44), tableWood);
-    top.position.y = TABLE.top - 0.04;
-    if ('castShadow' in top) { top.castShadow = true; top.receiveShadow = true; }
-    room.add(top);
-    const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, TABLE.top - 0.08, 20), pedestalMat);
-    pedestal.position.y = (TABLE.top - 0.08) / 2;
-    room.add(guarded(pedestal));
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.82, 0.06, 24), pedestalMat);
-    base.position.y = 0.03;
-    room.add(guarded(base));
-
     // keep the buffer sized to the window (and follow resizes)
     wireResize(canvasEl);
 
     scene.add(room);
-    return { scene, camera, renderer, board, table: TABLE };
+    return { scene, camera, renderer, board, table: { top: TABLE_TOP } };
+  }
+
+  function buildTable(length, depth) {
+    if (tableGroup) { scene.remove(tableGroup); tableGroup = null; }
+    tableGroup = new THREE.Group();
+    const wood = new THREE.MeshStandardMaterial({ map: makeCanvasTexture(256, 128, paintWood, 2, 2), roughness: 0.6 });
+    const pedestalMat = new THREE.MeshStandardMaterial({ color: 0x4A4038, roughness: 0.7 });
+    const top = new THREE.Mesh(new THREE.BoxGeometry(length, 0.08, depth), wood);
+    top.position.set(0, TABLE_TOP - 0.04, 0);
+    if ('castShadow' in top) { top.castShadow = true; top.receiveShadow = true; }
+    tableGroup.add(top);
+    for (const x of [-length / 4, length / 4]) {
+      const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, TABLE_TOP - 0.08, 20), pedestalMat);
+      pedestal.position.set(x, (TABLE_TOP - 0.08) / 2, 0);
+      tableGroup.add(guarded(pedestal));
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.7, 0.06, 24), pedestalMat);
+      base.position.set(x, 0.03, 0);
+      tableGroup.add(guarded(base));
+    }
+    scene.add(tableGroup);
+    return { length, depth, top: TABLE_TOP };
   }
 
   /** Keep the render buffer and camera framed to the live window size. */
@@ -220,6 +222,14 @@
     camGoal = { pos, target };
   }
 
+  function setLookOffset(yaw) {
+    lookTarget = Math.max(-LOOK_MAX, Math.min(LOOK_MAX, yaw || 0));
+  }
+  function getLookOffset() { return lookTarget; }
+  function rotateYaw(dx, dz, yaw) {
+    return { x: dx * Math.cos(yaw) + dz * Math.sin(yaw), z: -dx * Math.sin(yaw) + dz * Math.cos(yaw) };
+  }
+
   function animate() {
     global.requestAnimationFrame(animate);
     if (camGoal) {
@@ -232,17 +242,24 @@
       camTarget.x += (camGoal.target.x - camTarget.x) * damp;
       camTarget.y += (camGoal.target.y - camTarget.y) * damp;
       camTarget.z += (camGoal.target.z - camTarget.z) * damp;
-      camera.lookAt(camTarget.x, camTarget.y, camTarget.z);
+      lookCurrent += (lookTarget - lookCurrent) * 0.18;
+      const dir = rotateYaw(camTarget.x - camera.position.x, camTarget.z - camera.position.z, lookCurrent);
+      camera.lookAt(camera.position.x + dir.x, camTarget.y, camera.position.z + dir.z);
     }
     renderer.render(scene, camera);
   }
 
-  const mod = { initScene, animate, setCameraAnchor };
+  const mod = { initScene, animate, setCameraAnchor, buildTable, setLookOffset, getLookOffset, rotateYaw, LOOK_MAX };
   if (typeof module === 'object' && module.exports) {
     module.exports = mod;
   } else {
     global.initScene = initScene;
     global.animate = animate;
     global.setCameraAnchor = setCameraAnchor;
+    global.buildTable = buildTable;
+    global.setLookOffset = setLookOffset;
+    global.getLookOffset = getLookOffset;
+    global.rotateYaw = rotateYaw;
+    global.LOOK_MAX = LOOK_MAX;
   }
 })(typeof window !== 'undefined' ? window : global);
