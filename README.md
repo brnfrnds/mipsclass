@@ -143,6 +143,12 @@ rooms.get(roomId).addCablePair(0, 1, { base: 0x1000, size: 256 });
 
 Once cabled, a `cableMessage` from one seat is relayed to the other seat only — never the rest of the room.
 
+## Hosting a shift
+
+The [Operator's Handbook](docs/HOSTING.md) is a 1986-style host guide for running a 30-, 60-, or 90-minute session. It includes six paste-ready job cards (payroll, inventory, invoice, mail merge, a deliberate crash, and the shared wall board), the operator's queue drill, a reference race, and a one-page player briefing. It assumes you can start the server and read a job card; it does not assume you know MIPS.
+
+`npm test` runs every deck in the guide against the vendored simulator, with the expected output on the card.
+
 ## Architecture
 
 ```
@@ -215,7 +221,7 @@ npm test        # run the suite via node --test
 ```
 
 - Server tests: the room model, the queue (ETAs, kill/bump, retiming), WS routing (fake sockets), the HTTP endpoints (a real server on a random port)
-- Client tests: the editor commands/deck (real sim integration), the Screen grid, the gadget programs from the field guide, the explosion physics (deterministic, time-stepped), the reference card, the typing pulse — Three.js stubbed minimally
+- Client tests: the editor commands/deck (real sim integration), the Screen grid, the gadget programs from the field guide, the host guide job cards, the explosion physics (deterministic, time-stepped), the reference card, the typing pulse — Three.js stubbed minimally
 
 The design docs live under `docs/superpowers/` (the batch mainframe spec: `specs/2026-10-29-batch-mainframe-design.md`).
 
@@ -224,7 +230,7 @@ The design docs live under `docs/superpowers/` (the batch mainframe spec: `specs
 - **The queue is simulated** — jobs execute client-side when the server says their slot arrived; nothing is validated server-side yet. (The vendored sim runs in Node, so a true mainframe is a possible future.)
 - **Cable talk is half-wired** — pairs relay, but incoming messages aren't displayed and the shared memory block isn't synced between machines.
 - **The controller can be written, not read** — MIPS programs can't poll button state yet.
-- **No task system yet** — the batch loop is the sandbox; objectives would slot naturally onto it (a submitted job's listing output could be checked against a spec).
+- **No task system yet** — the batch loop is the sandbox; the [Operator's Handbook](docs/HOSTING.md) supplies a paper job board for hosted sessions, but the game doesn't check outputs.
 - **Every failure is the full explosion** — no severity tiers yet.
 - **No persistent operator login** — the opener is the operator, identified by the token returned at room creation. The browser keeps it only in that tab's `sessionStorage`, so joining from another browser or tab won't make you the operator. After refreshing the same tab, find the room in the lobby and sit down to rejoin as operator. Rooms die on a server restart.
 - The office was loud; this one is only as loud as your mute button allows.
