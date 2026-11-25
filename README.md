@@ -1,6 +1,6 @@
 # MIPS Office
 
-A networked browser game set in an 80s office. Everyone sits around a round conference table with a CRT terminal, and does their job the only way an 80s office knows how: by writing MIPS assembly — on a **batch mainframe**. You don't run programs; you **submit jobs** and wait your turn while the machine processes the room's deck queue. Your assembler listing prints onto your paper card line-by-line with teletype clatter. And if you write bad code, your computer explodes and the whole office sees it.
+A networked browser game set in an 80s office. Everyone sits around a rectangular conference table with a CRT terminal, and does their job the only way an 80s office knows how: by writing MIPS assembly — on a **batch mainframe**. You don't run programs; you **submit jobs** and wait your turn while the machine processes the room's deck queue. Your assembler listing prints onto your paper card line-by-line with teletype clatter. And if you write bad code, your computer explodes and the whole office sees it.
 
 ## Requirements
 
@@ -37,13 +37,13 @@ Notes:
 
 The first screen is an **interoffice memo**.
 
-1. **Create a room (admin).** Enter a seat count and press *Open a room*. You get a room ID — share it.
-2. **Join a room.** Paste the room ID, press *Find my room*, the seat grid appears.
+1. **Open a room.** Enter your name, choose 1–10 seats, and press *Open a room*. You get a room ID you can share.
+2. **Join a room.** Click a room in the lobby's *Open rooms* list to bring up its seat grid, or paste a room ID and press *Find my room*. The lobby lists empty rooms too and polls for updates while the memo is open.
 3. **Pick a seat.** Free seats are outlined; taken seats are hatched. Click a free one.
 4. **Your name** and a **profile picture URL** (optional — the tag falls back to text).
 5. **Sit down.** The memo lifts, your camera glides behind your avatar, and you're in the office.
 
-**The first joiner of a room becomes its operator** — the person who runs the machine (see *The operator* below).
+**The room opener is the operator** (the person who runs the machine), even if someone else sits down first. The office uses the room's seat count to size the rectangular table and arrange two facing rows, with a seat at the west end for odd counts.
 
 ## The terminal: a line editor
 
@@ -70,6 +70,7 @@ The **Editor** button (top-right HUD) or sitting down opens your terminal: a pho
 - The deck obeys the **punch-card limit: 80 columns** — longer lines are refused.
 - **Pasting** a multi-line program into the command line reads it into the deck like paper tape (`5 LINES READ FROM TAPE`).
 - The glass is a real character grid: text wraps at the column count, the newest line appears at the cursor, and the screen scrolls only when the cursor passes the bottom row. Your 3D CRT mirrors the glass live.
+- The editor disables arrow-key look while it's open. Close it to look around from your seat.
 
 ## The batch loop: submit, wait, read the paper
 
@@ -122,11 +123,12 @@ All synthesized with Web Audio (no asset files): key clacks while you type, tele
 
 ## Multiplayer
 
+- Looking around: hold **Left Arrow** or **Right Arrow** while seated to look that way, then release to face forward.
 - Presence: who joined which seat, who left (a disconnect frees the seat and kills their queued job)
 - Typing: other players see your avatar bang the keyboard
 - Explosions: office-wide, seat-targeted
 - The display board: shared office state
-- Printouts: **private** to each operator
+- Printouts: **private** to each player
 - Cable pairs (see below) and the controller state: shared
 
 ### Cabling two computers
@@ -134,7 +136,7 @@ All synthesized with Web Audio (no asset files): key clacks while you type, tele
 Cable pairs are configured in server code, per room. In `server/index.js`, in the `POST /rooms` handler after the room is created:
 
 ```js
-rooms.set(roomId, new Room(count));
+rooms.set(roomId, new Room(count, { operatorName, operatorToken }));
 // cable seat 0 to seat 1, sharing a 256-byte block at 0x1000:
 rooms.get(roomId).addCablePair(0, 1, { base: 0x1000, size: 256 });
 ```
@@ -147,7 +149,7 @@ Once cabled, a `cableMessage` from one seat is relayed to the other seat only �
 Browser (per player)                        Server (Node, in-memory)
 ┌─────────────────────────────┐             ┌──────────────────────────┐
 │ Three.js office             │             │ rooms: Map<id, Room>     │
-│  ├ round table + humanoids  │             │  ├ seats, players        │
+│  ├ room layout + humanoids  │             │  ├ seats, players        │
 │  ├ terminal glass (80×24)   │  WebSocket  │  ├ gadgetState (shared)  │
 │  ├ line editor + deck       │◄───────────►│  ├ job queues (simulated)│
 │  ├ vendored MARS sim        │  JSON events│  ├ cablePairs            │
@@ -165,12 +167,13 @@ Browser (per player)                        Server (Node, in-memory)
 
 | Path | Role |
 |---|---|
-| `server/index.js` | HTTP server, static files, `POST /rooms`, `GET /rooms/:id`, WS wiring, the 250ms mainframe clock |
+| `server/index.js` | HTTP server, static files, `POST /rooms`, `GET /rooms`, `GET /rooms/:id`, WS wiring, the 250ms mainframe clock |
 | `server/room.js` | `Room` — seats, players, gadget state, cable pairs, the job queue, the creator |
 | `server/queue.js` | `JobQueue` — the simulated FIFO: submit/position/tick/kill/bump/drop, ETAs |
 | `server/ws.js` | WS message routing, room-scoped broadcast, owner-only job messages, operator queue |
 | `server/stop.ps1` | `npm run stop` — stop the process on :3000 |
 | `public/js/main.js` | Boot, join flow, event wiring, the CRT glass mirror |
+| `public/js/layout.js` | Pure seat and camera layout for the rectangular table |
 | `public/js/editor.js` | The terminal: line editor, deck, command parser, queue lifecycle, the listing builder, the Screen glass, flame flash |
 | `public/js/gadgets.js` | The gadget I/O map, the private printout card (listing + output, folds), the shared board |
 | `public/js/mips.js` | `MipsSim` — the wrapper over the vendored simulator |
@@ -182,12 +185,15 @@ Browser (per player)                        Server (Node, in-memory)
 
 ### WebSocket protocol
 
+- `POST /rooms` takes JSON `{ seatCount, name }` and returns `{ roomId, seatCount, operatorToken }`.
+- `GET /rooms` returns an array of lobby summaries `{ roomId, seatCount, occupied, operator }`, newest first, including empty rooms. `occupied` is the number of seated players and `operator` is the opener's name.
+
 Messages are JSON with a `type` field.
 
 | Type | Direction | Meaning |
 |---|---|---|
-| `joinRoom` | client → server | `{roomId, seatIndex, name, profilePictureUrl}` |
-| `joined` | server → client | Your seat, the operator flag, the full room state (players as an array) |
+| `joinRoom` | client → server | `{ roomId, seatIndex, name, profilePictureUrl, operatorToken }` (`operatorToken` is optional) |
+| `joined` | server → client | Your player and the full room state (players as an array); `joined.operator` is `true` when your token matches the opener's token |
 | `playerJoined` / `playerLeft` | server → room | Presence |
 | `typing` / `playerTyping` | client → server / server → room | The keyboard-banging broadcast |
 | `submitJob` | client → server | `{lineCount}` — the deck enters the queue |
@@ -198,7 +204,7 @@ Messages are JSON with a `type` field.
 | `killJob` / `bumpJob` | creator → server | Operator powers (validated server-side) |
 | `operatorQueue` | server → creator | The full queue snapshot |
 | `gadgetUpdate` / `gadgetState` | client → server / server → room | Shared gadget writes (board, controller) |
-| `playerBlownUp` | client → server, server → room | A terminal exploded |
+| `blowUp` / `playerBlownUp` | client → server / server → room | A terminal exploded |
 | `cableMessage` | client → server, server → cabled peer | Relayed cable chat |
 | `error` | server → client | `seatTaken`, `unknownRoom`, `notCabled`, `notOperator`, … |
 
@@ -220,5 +226,5 @@ The design docs live under `docs/superpowers/` (the batch mainframe spec: `specs
 - **The controller can be written, not read** — MIPS programs can't poll button state yet.
 - **No task system yet** — the batch loop is the sandbox; objectives would slot naturally onto it (a submitted job's listing output could be checked against a spec).
 - **Every failure is the full explosion** — no severity tiers yet.
-- **No session persistence** — a refresh rejoins from the memo; rooms die on a server restart.
+- **No persistent operator login** — the opener is the operator, identified by the token returned at room creation. The browser keeps it only in that tab's `sessionStorage`, so joining from another browser or tab won't make you the operator. After refreshing the same tab, find the room in the lobby and sit down to rejoin as operator. Rooms die on a server restart.
 - The office was loud; this one is only as loud as your mute button allows.
