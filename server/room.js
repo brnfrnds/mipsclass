@@ -73,6 +73,15 @@ class Room {
       cablePairs: this.cablePairs,
     };
   }
+
+  summary(roomId) {
+    return {
+      roomId,
+      seatCount: this.seatCount,
+      occupied: this.players.size,
+      operator: this.operatorName,
+    };
+  }
 }
 
 module.exports = { Room };

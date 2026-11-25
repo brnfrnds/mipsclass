@@ -77,3 +77,12 @@ test('Room stores the opener identity; operatorId starts null', () => {
   assert.equal(plain.operatorName, null);
   assert.equal(plain.operatorToken, null);
 });
+
+test('Room.summary reports seats, occupancy and the opener name', () => {
+  const { Room } = require('../../server/room');
+  const room = new Room(4, { operatorName: 'Ana', operatorToken: 'tok' });
+  room.join(0, { id: 'p1', name: 'Bob' });
+  assert.deepEqual(room.summary('r1'), {
+    roomId: 'r1', seatCount: 4, occupied: 1, operator: 'Ana',
+  });
+});

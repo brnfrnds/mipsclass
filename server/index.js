@@ -67,6 +67,13 @@ function createServer(opts = {}) {
       return;
     }
 
+    // Lobby: every open room, newest first
+    if (req.method === 'GET' && reqUrl.pathname === '/rooms') {
+      const list = Array.from(rooms.entries()).reverse().map(([id, room]) => room.summary(id));
+      json(res, 200, list);
+      return;
+    }
+
     // Room state for the join screen's seat grid
     if (req.method === 'GET' && reqUrl.pathname.startsWith('/rooms/')) {
       const roomId = reqUrl.pathname.slice('/rooms/'.length);

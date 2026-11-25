@@ -59,3 +59,29 @@ test('POST /rooms clamps seats to 1-10 and returns an operator token', async () 
     server.close();
   }
 });
+
+test('GET /rooms lists open rooms newest first with occupancy', async () => {
+  const server = await start();
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const post = (body) => fetch(`${base}/rooms`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then((r) => r.json());
+
+    const a = await post({ seatCount: 8, name: 'Ana' });
+    const b = await post({ seatCount: 4 });
+
+    const list = await (await fetch(`${base}/rooms`)).json();
+    assert.ok(Array.isArray(list), 'an array of room summaries');
+    const foundA = list.find((r) => r.roomId === a.roomId);
+    const foundB = list.find((r) => r.roomId === b.roomId);
+    assert.ok(foundA && foundB, 'both rooms listed');
+    assert.deepEqual(foundA, { roomId: a.roomId, seatCount: 8, occupied: 0, operator: 'Ana' });
+    assert.equal(foundB.operator, 'Operator', 'blank name falls back to Operator');
+    assert.equal(list[0].roomId, b.roomId, 'newest room first');
+  } finally {
+    server.close();
+  }
+});
