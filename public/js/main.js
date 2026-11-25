@@ -1,44 +1,14 @@
-// 3D office: a round conference table, one terminal place-setting per seat,
-// and a camera that glides to your seat when you sit down — every other
-// operator visible across the table. All placement is trigonometry off the
-// seat count: no guessed coordinates.
+// 3D office: a rectangular conference table sized for the room's seat count,
+// one terminal per seat, and a camera that glides to your seat when you sit down.
 (function () {
   const canvas = document.getElementById('canvas');
   if (!canvas) return;
 
-  const { scene, camera, renderer, board, table } = initScene(canvas);
+  const { scene, camera, board } = initScene(canvas);
 
-  // ---- seat layout: pure math ----
-  const SEATS = 4;               // seat count until rooms drive the scene
-  const TERMINAL_RADIUS = 1.1;   // terminal place-setting, fully on the tabletop (keyboard reaches 1.76 < 1.9)
-  const SEAT_RADIUS = 2.35;      // chair + humanoid, just outside the table
-  const CAMERA_RADIUS = 3.3;     // your eyes, just behind your avatar
-  const CAMERA_HEIGHT = 2.9;     // high enough that your own head never blocks the player across
-
-  const layout = [];
-  for (let i = 0; i < SEATS; i++) {
-    const theta = (i * 2 * Math.PI) / SEATS;
-    layout.push({
-      theta,
-      terminal: { x: Math.cos(theta) * TERMINAL_RADIUS, z: Math.sin(theta) * TERMINAL_RADIUS },
-      // screen faces the sitter (outward): local +z must point away from center
-      rot: Math.PI / 2 - theta,
-      cam: {
-        pos: { x: Math.cos(theta) * CAMERA_RADIUS, y: CAMERA_HEIGHT, z: Math.sin(theta) * CAMERA_RADIUS },
-        target: { x: 0, y: 0.95, z: 0 },
-      },
-    });
-  }
-
-  const seats = [];
-  layout.forEach((spot, i) => {
-    const seat = addSeat(scene, i, spot.terminal.x, spot.terminal.z);
-    if (seat.group.rotation) seat.group.rotation.y = spot.rot;
-    // the place setting is built tabletop-relative — lift it onto the table
-    seat.group.position.y = table.top;
-    seats.push(seat);
-    updateScreen(seat, `TERMINAL ${i + 1}\nREADY_`);
-  });
+  let layout = [];
+  let seats = [];
+  let buildOffice = null; // assigned inside the app wiring
 
   animate();
 
@@ -60,7 +30,7 @@
   }
 
   // ---- Join screen flow ----
-  function wireJoinUI(net, players) {
+  function wireJoinUI(net, players, onRoomLoaded) {
     const $ = (id) => document.getElementById(id);
     const joinEl = $('join'), hudEl = $('hud'), seatsEl = $('seats'), msgEl = $('msg');
     const roomIdInput = $('roomId');
@@ -93,6 +63,7 @@
       const state = await res.json();
       currentRoomId = id;
       roomIdInput.value = id;
+      onRoomLoaded(state.seatCount);
       renderSeats(state.seatCount, state.seats);
       msgEl.textContent = '';
     }
@@ -147,8 +118,6 @@
     document.addEventListener('click', wake, { once: true });
     document.addEventListener('keydown', wake, { once: true });
 
-    players.initPlayers({ scene, seats, tableTop: table.top, tableRadius: table.radius });
-
     const ref = mountReference({ container: document.body });
 
     function sitDown(player) {
@@ -192,7 +161,23 @@
       refreshGadgetVisuals(gadgets.getModel());
     });
 
-    wireJoinUI(net, players);
+    buildOffice = function (seatCount) {
+      seats.forEach((s) => scene.remove(s.group));
+      const built = seatLayout(seatCount);
+      const dims = buildTable(built.table.length, built.table.depth);
+      seats = built.seats.map((spot) => {
+        const seat = addSeat(scene, spot.index, spot.x, spot.z);
+        seat.group.rotation.y = spot.rot;
+        seat.group.position.y = dims.top;
+        updateScreen(seat, `TERMINAL ${spot.index + 1}\nREADY_`);
+        return seat;
+      });
+      layout = built.seats;
+      window.__officeSeats = seats;
+      players.initPlayers({ scene, seats, tableTop: dims.top, table: dims });
+    };
+
+    wireJoinUI(net, players, buildOffice);
 
     // Editor starts hidden; it opens when you sit, and the HUD has toggles.
     const editor = mountEditor({ container: document.body, teletype: true });
