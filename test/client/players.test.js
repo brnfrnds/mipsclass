@@ -153,3 +153,12 @@ test('debris fades with time and the explosion reports dead past its TTL', async
   assert.equal(ex.meshes[0].material.opacity, 0, 'faded fully');
 });
 
+test('debrisFloor uses the rectangular tabletop, not a circle', async () => {
+  const players = await import('../../public/js/players.js');
+  const dims = { length: 10, depth: 3.2 };
+  assert.equal(players.debrisFloor(0, 0, 1.06, dims), 1.06, 'centre is tabletop');
+  assert.equal(players.debrisFloor(4.9, 1.5, 1.06, dims), 1.06, 'near the corner is tabletop');
+  assert.equal(players.debrisFloor(5.1, 0, 1.06, dims), 0.03, 'past the long edge is carpet');
+  assert.equal(players.debrisFloor(0, 1.7, 1.06, dims), 0.03, 'past the short edge is carpet');
+});
+

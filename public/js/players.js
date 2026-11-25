@@ -9,7 +9,7 @@ const THREE = globalThis.THREE;
 let scene = null;
 let seats = [];
 let tableTop = 1.06; // seat-group origins sit at this world height
-let tableRadius = 1.9;
+let tableDims = { length: 3.8, depth: 3.2 };
 const states = new Map(); // seatIndex -> { humanoid, sprite, armL, armR, keyboard, baseY, typing, bobT }
 const explosions = [];
 let ticking = false;
@@ -143,8 +143,16 @@ export function initPlayers(opts) {
   scene = opts.scene;
   seats = opts.seats || [];
   tableTop = opts.tableTop !== undefined ? opts.tableTop : 1.06;
-  tableRadius = opts.tableRadius !== undefined ? opts.tableRadius : 1.9;
+  tableDims = opts.table || (opts.tableRadius !== undefined
+    ? { length: opts.tableRadius * 2, depth: opts.tableRadius * 2 }
+    : tableDims);
   startTick();
+}
+
+export function debrisFloor(x, z, tableTop, dims) {
+  const d = dims && dims.length && dims.depth ? dims : { length: 3.8, depth: 3.2 };
+  const onTable = Math.abs(x) <= d.length / 2 && Math.abs(z) <= d.depth / 2;
+  return onTable ? tableTop : 0.03;
 }
 
 export function add(player, opts = {}) {
@@ -277,7 +285,7 @@ export function stepExplosion(ex, now) {
     m.position.z += v.z * dt;
 
     // bounce on the tabletop — or on the carpet once past the table's rim
-    const floorY = Math.hypot(m.position.x, m.position.z) > tableRadius ? 0.03 : ex.floorY;
+    const floorY = debrisFloor(m.position.x, m.position.z, ex.floorY, tableDims);
     if (m.position.y < floorY && v.y < 0) {
       m.position.y = floorY;
       v.y = -v.y * RESTITUTION;
