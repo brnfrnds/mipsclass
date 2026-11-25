@@ -630,3 +630,11 @@ html, body {
   transform: translate(1px, 1px);
   box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.4);
 }
+
+.lobby { margin: 0 0 16px; }
+.lobby-head { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; margin: 0 0 6px; }
+.lobby-list { display: flex; flex-direction: column; gap: 4px; max-height: 132px; overflow-y: auto; }
+.lobby-row { display: flex; gap: 10px; align-items: baseline; width: 100%; padding: 6px 4px; background: transparent; border: none; border-bottom: 1px dashed var(--ink-soft); color: var(--ink); font-family: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.lobby-row:hover { background: var(--paper-dim); }
+.lobby-occupancy { margin-left: auto; font-weight: 700; }
+.lobby-empty { font-size: 12.5px; color: var(--ink-soft); padding: 4px 0; }

@@ -9,6 +9,7 @@
   let layout = [];
   let seats = [];
   let buildOffice = null; // assigned inside the app wiring
+  let stopLobbyPolling = null;
 
   animate();
 
@@ -36,6 +37,7 @@
     const roomIdInput = $('roomId');
     let selectedSeat = null;
     let currentRoomId = null;
+    let lobbyTimer = null;
 
     function renderSeats(count, takenArr) {
       seatsEl.innerHTML = '';
@@ -68,14 +70,59 @@
       msgEl.textContent = '';
     }
 
+    async function refreshLobby() {
+      const list = document.getElementById('lobbyList');
+      if (!list) return;
+      let rooms = [];
+      try {
+        const res = await fetch('/rooms', { cache: 'no-store' });
+        if (res.ok) rooms = await res.json();
+      } catch { /* server down: leave the list empty */ }
+      list.innerHTML = '';
+      if (!rooms.length) {
+        const empty = document.createElement('div');
+        empty.className = 'lobby-empty';
+        empty.textContent = 'No rooms open — open one above.';
+        list.appendChild(empty);
+        return;
+      }
+      rooms.forEach((room) => {
+        const row = document.createElement('button');
+        row.className = 'lobby-row';
+        const id = document.createElement('span');
+        id.className = 'lobby-room';
+        id.textContent = `ROOM ${room.roomId.slice(0, 8).toUpperCase()}`;
+        const host = document.createElement('span');
+        host.className = 'lobby-host';
+        host.textContent = room.operator || 'OPERATOR'; // textContent: names are user input
+        const occ = document.createElement('span');
+        occ.className = 'lobby-occupancy';
+        occ.textContent = `${room.occupied}/${room.seatCount}`;
+        row.append(id, host, occ);
+        row.onclick = () => loadRoom(room.roomId);
+        list.appendChild(row);
+      });
+    }
+
+    stopLobbyPolling = () => {
+      if (lobbyTimer) { clearInterval(lobbyTimer); lobbyTimer = null; }
+    };
+
+    lobbyTimer = setInterval(() => {
+      if (!document.getElementById('join').classList.contains('hidden')) refreshLobby();
+    }, 3000);
+    refreshLobby();
+
     $('btnCreate').onclick = async () => {
       const seatCount = parseInt($('seatCount').value, 10) || 4;
+      const name = $('playerName').value || 'Operator';
       const res = await fetch('/rooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ seatCount }),
+        body: JSON.stringify({ seatCount, name }),
       });
-      const { roomId } = await res.json();
+      const { roomId, operatorToken } = await res.json();
+      sessionStorage.setItem('mipsOperatorToken:' + roomId, operatorToken);
       await loadRoom(roomId);
     };
 
@@ -92,6 +139,7 @@
         seatIndex: selectedSeat,
         name: $('playerName').value || 'Operator',
         profilePictureUrl: $('profilePic').value,
+        operatorToken: sessionStorage.getItem('mipsOperatorToken:' + currentRoomId) || undefined,
       });
     };
 
@@ -126,6 +174,7 @@
       if (typeof setCameraAnchor === 'function') setCameraAnchor(spot.cam.pos, spot.cam.target);
       mySeatIndex = player.seatIndex;
       document.getElementById('join').classList.add('hidden');
+      if (stopLobbyPolling) stopLobbyPolling();
       document.getElementById('hud').classList.remove('hidden');
       document.getElementById('seatNum').textContent = String(player.seatIndex + 1);
       document.getElementById('hudName').textContent = player.name || 'Operator';
