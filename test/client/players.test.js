@@ -162,3 +162,29 @@ test('debrisFloor uses the rectangular tabletop, not a circle', async () => {
   assert.equal(players.debrisFloor(0, 1.7, 1.06, dims), 0.03, 'past the short edge is carpet');
 });
 
+test('debrisFloor falls back to the default 3.8×3.2 footprint', async () => {
+  const players = await import('../../public/js/players.js');
+  assert.equal(players.debrisFloor(0, 1.5, 1.06, undefined), 1.06, 'missing dims uses the default half-depth');
+  assert.equal(players.debrisFloor(0, 1.7, 1.06, {}), 0.03, 'empty dims uses the default half-depth');
+});
+
+test('initPlayers resets the footprint when no table is supplied', async () => {
+  const players = await import('../../public/js/players.js');
+  const scene = makeScene();
+  const seat = makeSeat(0);
+  players.initPlayers({ scene, seats: [seat], tableTop: 1.06, tableRadius: 1.9 });
+  players.add({ seatIndex: 0, name: 'Ada', profilePictureUrl: '' }, { isSelf: true });
+  players.initPlayers({ scene, seats: [seat], tableTop: 1.06 }); // no table information
+
+  players.explode(0);
+  const ex = players.lastExplosion();
+  const m = ex.meshes[0];
+  // past the default 1.6 half-depth, inside the previous 1.9 half-extent
+  m.position.x = 0;
+  m.position.y = 0.02;
+  m.position.z = 1.7;
+  Object.assign(ex.velocities.get(m), { x: 0, y: -1, z: 0 });
+  players.stepExplosion(ex, ex.born + 50);
+  assert.equal(m.position.y, 0.03, 'debris falls past the reset footprint to the carpet');
+});
+

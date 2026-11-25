@@ -145,7 +145,7 @@ export function initPlayers(opts) {
   tableTop = opts.tableTop !== undefined ? opts.tableTop : 1.06;
   tableDims = opts.table || (opts.tableRadius !== undefined
     ? { length: opts.tableRadius * 2, depth: opts.tableRadius * 2 }
-    : tableDims);
+    : { length: 3.8, depth: 3.2 });
   startTick();
 }
 
