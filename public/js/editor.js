@@ -618,7 +618,7 @@ export class Editor {
 
   isOpen() { return this.el.style.display !== 'none'; }
   show() { this.el.style.display = 'flex'; this.cmd.focus(); if (this.onShow) this.onShow(); }
-  hide() { this.el.style.display = 'none'; }
+  hide() { this.cmd.blur(); this.el.style.display = 'none'; }
   destroy() {
     document.removeEventListener('keydown', this._esc);
     this.el.remove();

@@ -1,5 +1,5 @@
 // The office staff: when a player joins, a low-poly humanoid takes their
-// seat around the round table — shirt color by seat, arms that bang on the
+// seat around the rectangular table — shirt color by seat, arms that bang on the
 // keyboard while they type, a name/photo sprite over their head, and an
 // explosion when their MIPS program blows up: the terminal and the operator
 // hop on a smooth parabola while debris flies ballistic arcs and bounces.

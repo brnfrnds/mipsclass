@@ -124,6 +124,7 @@
       const { roomId, operatorToken } = await res.json();
       sessionStorage.setItem('mipsOperatorToken:' + roomId, operatorToken);
       await loadRoom(roomId);
+      refreshLobby();
     };
 
     $('btnJoin').onclick = () => {
@@ -248,6 +249,7 @@
     document.addEventListener('keyup', (e) => {
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') setLookOffset(0);
     });
+    window.addEventListener('blur', () => setLookOffset(0));
 
     editor.onRef = () => ref.toggle();
     net.on('joined', () => editor.show());

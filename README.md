@@ -153,7 +153,7 @@ Browser (per player)                        Server (Node, in-memory)
 │  ├ terminal glass (80×24)   │  WebSocket  │  ├ gadgetState (shared)  │
 │  ├ line editor + deck       │◄───────────►│  ├ job queues (simulated)│
 │  ├ vendored MARS sim        │  JSON events│  ├ cablePairs            │
-│  ├ paper card (printouts)   │             │  └ creator = operator    │
+│  ├ paper card (printouts)   │             │  └ opener = operator     │
 │  ├ reference card           │             └──────────────────────────┘
 │  └ Web Audio soundscape     │
 └─────────────────────────────┘
@@ -168,7 +168,7 @@ Browser (per player)                        Server (Node, in-memory)
 | Path | Role |
 |---|---|
 | `server/index.js` | HTTP server, static files, `POST /rooms`, `GET /rooms`, `GET /rooms/:id`, WS wiring, the 250ms mainframe clock |
-| `server/room.js` | `Room` — seats, players, gadget state, cable pairs, the job queue, the creator |
+| `server/room.js` | `Room` — seats, players, gadget state, cable pairs, the job queue, the opener |
 | `server/queue.js` | `JobQueue` — the simulated FIFO: submit/position/tick/kill/bump/drop, ETAs |
 | `server/ws.js` | WS message routing, room-scoped broadcast, owner-only job messages, operator queue |
 | `server/stop.ps1` | `npm run stop` — stop the process on :3000 |
@@ -201,8 +201,8 @@ Messages are JSON with a `type` field.
 | `jobRunning` | server → owner | Your slot arrived — run your held deck |
 | `jobDone` | server → owner | The slot is over — the terminal returns to READY |
 | `jobKilled` | server → owner | The operator killed your job |
-| `killJob` / `bumpJob` | creator → server | Operator powers (validated server-side) |
-| `operatorQueue` | server → creator | The full queue snapshot |
+| `killJob` / `bumpJob` | opener → server | Operator powers (validated server-side) |
+| `operatorQueue` | server → opener | The full queue snapshot |
 | `gadgetUpdate` / `gadgetState` | client → server / server → room | Shared gadget writes (board, controller) |
 | `blowUp` / `playerBlownUp` | client → server / server → room | A terminal exploded |
 | `cableMessage` | client → server, server → cabled peer | Relayed cable chat |
@@ -211,7 +211,7 @@ Messages are JSON with a `type` field.
 ## Development
 
 ```bash
-npm test        # 78 tests via node --test
+npm test        # run the suite via node --test
 ```
 
 - Server tests: the room model, the queue (ETAs, kill/bump, retiming), WS routing (fake sockets), the HTTP endpoints (a real server on a random port)
