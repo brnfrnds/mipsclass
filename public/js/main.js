@@ -231,6 +231,24 @@
     // Editor starts hidden; it opens when you sit, and the HUD has toggles.
     const editor = mountEditor({ container: document.body, teletype: true });
     editor.hide();
+    editor.onShow = () => setLookOffset(0);
+
+    function lookAllowed(e) {
+      if (mySeatIndex === null) return false;
+      if (editor.isOpen()) return false;
+      const tag = e.target && e.target.tagName;
+      return tag !== 'INPUT' && tag !== 'TEXTAREA';
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (!lookAllowed(e)) return;
+      if (e.key === 'ArrowLeft') { e.preventDefault(); setLookOffset(Infinity); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); setLookOffset(-Infinity); }
+    });
+    document.addEventListener('keyup', (e) => {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') setLookOffset(0);
+    });
+
     editor.onRef = () => ref.toggle();
     net.on('joined', () => editor.show());
     net.on('joined', (m) => { if (m.operator) editor.setOperator(); });

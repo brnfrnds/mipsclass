@@ -616,7 +616,8 @@ export class Editor {
     setTimeout(() => this.el.classList.remove('shaking'), 450);
   }
 
-  show() { this.el.style.display = 'flex'; this.cmd.focus(); }
+  isOpen() { return this.el.style.display !== 'none'; }
+  show() { this.el.style.display = 'flex'; this.cmd.focus(); if (this.onShow) this.onShow(); }
   hide() { this.el.style.display = 'none'; }
   destroy() {
     document.removeEventListener('keydown', this._esc);
