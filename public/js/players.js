@@ -123,7 +123,7 @@ function makeSprite(player) {
 
   const texture = new THREE.CanvasTexture(c);
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true }));
-  sprite.scale.set(1.2, 0.6, 1);
+  sprite.scale.set(1.0, 0.5, 1);
 
   const url = player.profilePictureUrl;
   if (url && typeof Image !== 'undefined') {
