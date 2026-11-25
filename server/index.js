@@ -53,11 +53,14 @@ function createServer(opts = {}) {
     if (req.method === 'POST' && reqUrl.pathname === '/rooms') {
       try {
         const body = await readBody(req);
-        const { seatCount } = JSON.parse(body.toString() || '{}');
-        const count = Number.isInteger(seatCount) && seatCount > 0 ? seatCount : 4;
+        const { seatCount, name } = JSON.parse(body.toString() || '{}');
+        const raw = Number.isInteger(seatCount) && seatCount > 0 ? seatCount : 4;
+        const count = Math.min(10, Math.max(1, raw));
+        const operatorName = typeof name === 'string' && name.trim() ? name.trim().slice(0, 40) : 'Operator';
+        const operatorToken = uuidv4();
         const roomId = uuidv4();
-        rooms.set(roomId, new Room(count));
-        json(res, 200, { roomId, seatCount: count });
+        rooms.set(roomId, new Room(count, { operatorName, operatorToken }));
+        json(res, 200, { roomId, seatCount: count, operatorToken });
       } catch (e) {
         json(res, 400, { error: 'bad request' });
       }

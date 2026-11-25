@@ -66,3 +66,14 @@ test('Room.addCablePair and getCablePeer', () => {
   assert.equal(room.getCablePeer(2), null);
   assert.deepEqual(room.cablePairs[0].sharedMemory, { base: 0x1000, size: 256 });
 });
+
+test('Room stores the opener identity; operatorId starts null', () => {
+  const { Room } = require('../../server/room');
+  const room = new Room(4, { operatorName: 'Ana', operatorToken: 'tok' });
+  assert.equal(room.operatorName, 'Ana');
+  assert.equal(room.operatorToken, 'tok');
+  assert.equal(room.operatorId, null);
+  const plain = new Room(2);
+  assert.equal(plain.operatorName, null);
+  assert.equal(plain.operatorToken, null);
+});

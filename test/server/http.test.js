@@ -34,3 +34,28 @@ test('POST /rooms creates a room and GET /rooms/:id returns its seat state', asy
     server.close();
   }
 });
+
+test('POST /rooms clamps seats to 1-10 and returns an operator token', async () => {
+  const server = await start();
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const post = (body) => fetch(`${base}/rooms`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then((r) => r.json());
+
+    const big = await post({ seatCount: 50, name: 'Ana' });
+    assert.equal(big.seatCount, 10, 'over-cap seat count clamps to 10');
+    assert.equal(typeof big.operatorToken, 'string');
+    assert.ok(big.operatorToken.length > 0);
+
+    const none = await post({});
+    assert.equal(none.seatCount, 4, 'missing seat count defaults to 4');
+
+    const zero = await post({ seatCount: 0 });
+    assert.equal(zero.seatCount, 4, 'invalid seat count defaults to 4');
+  } finally {
+    server.close();
+  }
+});

@@ -1,7 +1,7 @@
 const { JobQueue } = require('./queue');
 
 class Room {
-  constructor(seatCount) {
+  constructor(seatCount, opts = {}) {
     this.seatCount = seatCount;
     // seats[seatIndex] = playerId or null
     this.seats = new Array(seatCount).fill(null);
@@ -13,7 +13,9 @@ class Room {
     };
     this.cablePairs = []; // [{ seatA, seatB, sharedMemory: { base, size } }]
     this.queue = new JobQueue(); // the simulated mainframe queue
-    this.creatorId = null; // the first joiner; the operator
+    this.operatorName = opts.operatorName || null; // the person who opened the room
+    this.operatorToken = opts.operatorToken || null; // secret that proves it
+    this.operatorId = null; // set when that person joins
   }
 
   join(seatIndex, player) {
